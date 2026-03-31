@@ -1,0 +1,2843 @@
+var SageAPI = SageAPI || (function () {
+    'use strict';
+
+    var SCRIPT = 'SageAPI';
+    var VERSION = '0.2.5';
+    var STATE = 'SAGE_API_STATE';
+
+    var CONFIG = {
+        coinAttrs: {
+            gp: 'gp',
+            sp: 'sp',
+            cp: 'cp'
+        },
+        reactionAttr: 'reactionbonus',
+        intelligenceAttr: 'intelligence',
+        shortTermBaseGpPerDay: 100,
+        cooldownDaysAfterShortTerm: 30,
+        shortTermMaxDays: 7,
+        daysPerMonth: 30,
+        pcResearch: {
+            librarySizes: {
+                small: { label: 'Small', chanceMod: -10, timeMultiplier: 1.5 },
+                medium: { label: 'Medium', chanceMod: 0, timeMultiplier: 1 },
+                large: { label: 'Large', chanceMod: 10, timeMultiplier: 0.75 }
+            },
+            knowledgeTable: {
+                in: {
+                    general: [41, 60],
+                    specific: [26, 45],
+                    exacting: [11, 25]
+                },
+                out: {
+                    general: [16, 35],
+                    specific: [6, 20],
+                    exacting: [1, 10]
+                }
+            },
+            discoveryTable: {
+                in: {
+                    general: { unit: 'days', min: 1, max: 6 },
+                    specific: { unit: 'days', min: 2, max: 12 },
+                    exacting: { unit: 'days', min: 7, max: 42 }
+                },
+                out: {
+                    general: { unit: 'days', min: 3, max: 12 },
+                    specific: { unit: 'days', min: 7, max: 30 },
+                    exacting: { unit: 'days', min: 21, max: 90 }
+                }
+            }
+        },
+        colors: {
+            panelBg: '#111111',
+            panelBorder: '#666666',
+            text: '#f0f0f0',
+            subtext: '#cccccc',
+            activeText: '#56b862',
+            primaryBg: '#3b4d66',
+            primaryBorder: '#8aa0bd',
+            reportBg: '#3b4d66',
+            reportBorder: '#8aa0bd',
+            warnBg: '#3b4d66',
+            warnBorder: '#8aa0bd',
+            dangerBg: '#3b4d66',
+            dangerBorder: '#8aa0bd',
+            gmBg: '#3b4d66',
+            gmBorder: '#8aa0bd'
+        },
+        randomNames: [
+            'Aldren', 'Belthas', 'Corvinius', 'Damaris', 'Eldric', 'Fenra', 'Galen', 'Helvia', 'Ilyr', 'Jorven',
+            'Kaelis', 'Lorian', 'Malthus', 'Nerissa', 'Orlan', 'Peredis', 'Quent', 'Rhesa', 'Sylvar', 'Talmon',
+            'Ulric', 'Vespera', 'Wendric', 'Ysolde', 'Zeran'
+        ],
+        fields: {
+            humankind: {
+                label: 'Humankind',
+                spellType: 'cleric',
+                specials: ['Art & Music', 'Biology', 'Demography', 'History', 'Languages', 'Legends & Folklore', 'Law & Customs', 'Philosophy & Ethics', 'Politics & Genealogy', 'Psychology', 'Sociology', 'Theology & Myth']
+            },
+            demihumankind: {
+                label: 'Demi-Humankind',
+                spellType: 'cleric',
+                specials: ['Art & Music', 'Biology', 'Demography', 'History', 'Languages', 'Legends & Folklore', 'Law & Customs', 'Philosophy & Ethics', 'Politics & Genealogy', 'Psychology', 'Sociology', 'Theology & Myth']
+            },
+            humanoids: {
+                label: 'Humanoids & Giantkind',
+                spellType: 'cleric',
+                specials: ['Biology', 'Demography', 'History', 'Languages', 'Legends & Folklore', 'Law & Customs', 'Sociology', 'Theology & Myth']
+            },
+            physical: {
+                label: 'Physical Universe(s)',
+                spellType: 'cleric',
+                specials: ['Architecture & Engineering', 'Astronomy', 'Chemistry', 'Geography', 'Geology & Mineralogy', 'Mathematics', 'Meteorology & Climatology', 'Oceanography', 'Physics', 'Topography & Cartography']
+            },
+            fauna: {
+                label: 'Fauna',
+                spellType: 'druid',
+                specials: ['Amphibians', 'Arachnids', 'Avians', 'Cephalopods & Echinoderms', 'Crustaceans & Mollusks', 'Ichthyoids', 'Insects', 'Mammals', 'Marsupials', 'Reptiles']
+            },
+            flora: {
+                label: 'Flora',
+                spellType: 'druid',
+                specials: ['Bushes & Shrubs', 'Flowers', 'Fungi', 'Grasses & Grains', 'Herbs', 'Mosses & Ferns', 'Trees', 'Weeds']
+            },
+            supernatural: {
+                label: 'Supernatural & Unusual',
+                spellType: 'magicuser',
+                specials: ['Astrology & Numerology', 'Cryptography', 'Divination', 'Dweomercraeft', 'Heraldry, Signs & Sigils', 'Medicine', 'Metaphysics', 'Planes (Astral, Elemental & Ethereal)', 'Planes (Outer)']
+            }
+        },
+        fieldOrder: ['humankind', 'demihumankind', 'humanoids', 'physical', 'fauna', 'flora', 'supernatural'],
+        knowledgeTable: {
+            out: {
+                general: [31, 50],
+                specific: [11, 20],
+                exacting: null
+            },
+            minor: {
+                general: [46, 65],
+                specific: [31, 40],
+                exacting: [11, 20]
+            },
+            major: {
+                general: [61, 80],
+                specific: [51, 60],
+                exacting: [26, 35]
+            },
+            special: {
+                general: [81, 100],
+                specific: [76, 95],
+                exacting: [61, 80]
+            }
+        },
+        discoveryTable: {
+            out: {
+                general: { unit: 'rounds', min: 1, max: 6, costGpPerDay: 100 },
+                specific: { unit: 'days', min: 2, max: 24, costGpPerDay: 100 },
+                exacting: null
+            },
+            minor: {
+                general: { unit: 'rounds', min: 1, max: 4, costGpPerDay: 1000 },
+                specific: { unit: 'days', min: 2, max: 20, costGpPerDay: 1000 },
+                exacting: { unit: 'days', min: 5, max: 40, costGpPerDay: 1000 }
+            },
+            major: {
+                general: { unit: 'rounds', min: 1, max: 3, costGpPerDay: 500 },
+                specific: { unit: 'days', min: 1, max: 12, costGpPerDay: 500 },
+                exacting: { unit: 'days', min: 3, max: 30, costGpPerDay: 500 }
+            },
+            special: {
+                general: { unit: 'rounds', min: 1, max: 2, costGpPerDay: 200 },
+                specific: { unit: 'hours', min: 1, max: 10, costGpPerDay: 200 },
+                exacting: { unit: 'days', min: 2, max: 12, costGpPerDay: 200 }
+            }
+        },
+        alignmentTable: [
+            [5, 'Chaotic Evil'],
+            [10, 'Chaotic Good'],
+            [20, 'Chaotic Neutral'],
+            [30, 'Lawful Evil'],
+            [40, 'Lawful Good'],
+            [60, 'Lawful Neutral'],
+            [80, 'Neutral'],
+            [90, 'Neutral Evil'],
+            [100, 'Neutral Good']
+        ]
+
+    };
+
+    var AGE_CATEGORIES = ['Middle-Aged', 'Old', 'Venerable'];
+    var NPC_TABLES = {
+        appearanceGeneral: ['dirty', 'clean', 'unkempt', 'immaculate', 'rough', 'ragged', 'dandyish', 'foppish', 'non-descript', 'imposing'],
+        sanity: ['very stable', 'normal', 'normal', 'normal', 'normal', 'normal', 'neurotic', 'unstable', 'insane', 'maniacal'],
+        generalTendencies: ['optimist', 'pessimist', 'hedonist', 'altruist', 'helpful/kindly', 'careless', 'capricious/mischievous', 'sober', 'curious/inquisitive', 'moody', 'trusting', 'suspicious/cautious', 'precise/exacting', 'perceptive', 'opinionated/contrary', 'violent/warlike', 'studious', 'foul/barbaric', 'cruel/callous', 'practical joker/prankster', 'servile/obsequious', 'fanatical/obsessive', 'malevolent', 'loquacious'],
+        personalityAverage: ['modest', 'egoist/arrogant', 'friendly', 'aloof', 'hostile', 'well-spoken', 'diplomatic', 'abrasive'],
+        personalityExtroverted: ['forceful', 'overbearing', 'friendly', 'blustering', 'antagonistic', 'rude', 'rash', 'diplomatic'],
+        personalityIntroverted: ['retiring', 'taciturn', 'friendly', 'aloof', 'hostile', 'rude', 'courteous', 'solitary/secretive'],
+        disposition: ['cheerful', 'morose', 'compassionate/sensitive', 'unfeeling/insensitive', 'humble', 'proud/haughty', 'even tempered', 'hot tempered', 'easy going', 'harsh'],
+        intellect: ['dull', 'average', 'average', 'active', 'active', 'dreaming', 'ponderous', 'anti-intellectual', 'scheming', 'brilliant'],
+        nature: ['soft-hearted', 'forgiving', 'hard-hearted', 'unforgiving', 'jealous', 'vengeful'],
+        materialism: ['aesthetic', 'intellectualist', 'average', 'covetous', 'greedy', 'avaricious'],
+        honesty: ['scrupulous', 'very honorable', 'truthful', 'average', 'average', 'average', 'liar', 'deceitful'],
+        bravery: ['normal', 'normal', 'normal', 'foolhardy', 'brave', 'fearless', 'cowardly', 'craven'],
+        energy: ['slothful', 'lazy', 'normal', 'normal', 'normal', 'energetic', 'energetic', 'driven'],
+        thrift: ['miserly', 'mean', 'thrifty', 'average', 'average', 'spendthrift', 'spendthrift', 'wastrel'],
+        morals: ['ascetic', 'virtuous', 'normal', 'normal', 'lusty', 'lusty', 'lustful', 'immoral', 'amoral', 'perverted', 'sadistic', 'depraved'],
+        piety: ['saintly', 'martyr/zealot', 'pious', 'reverent', 'average', 'average', 'average', 'average', 'impious', 'irreverent', 'iconoclastic', 'irreligious'],
+        interests: ['religion', 'legends', 'history', 'nature', 'horticulture', 'husbandry', 'exotic animals', 'hunting', 'fishing', 'handicrafts', 'athletics', 'politics', 'wines & spirits', 'foods & preparation', 'gambling', 'drugs', 'collector', 'collector', 'collector', 'collector', 'community service', 'altruism', 'none', 'none'],
+        collections: ['knives & daggers', 'swords', 'weapons', 'shields & weapons', 'armor', 'books & scrolls', 'minerals & gems', 'ornaments & jewelry', 'coins & tokens', 'trophies & skins', 'porcelain, china & crystal', 'artwork']
+    };
+    var SPECIAL_CLERIC_OR_MAGICUSER = ['Art & Music', 'Legends & Folklore'];
+    var SUPERNATURAL_MAGICUSER_SPECIALS = ['Dweomercraeft', 'Divination', 'Metaphysics', 'Planes (Astral, Elemental & Ethereal)', 'Planes (Outer)', 'Heraldry, Signs & Sigils'];
+    var SPELL_POOLS = {
+        'magic-user': {
+            1: ['Charm Person', 'Detect Magic', 'Enlarge', 'Feather Fall', 'Hold Portal', 'Identify', 'Jump', 'Light', 'Magic Missile', 'Protection from Evil', 'Read Magic', 'Shield', 'Shocking Grasp', 'Sleep', 'Spider Climb', 'Unseen Servant', 'Ventriloquism'],
+            2: ['Detect Invisible', 'ESP', 'Forget', 'Invisibility', 'Knock', 'Levitate', 'Locate Object', 'Magic Mouth', 'Mirror Image', 'Pyrotechnics', 'Ray of Enfeeblement', 'Rope Trick', 'Scare', 'Stinking Cloud', 'Strength', 'Web', 'Wizard Lock'],
+            3: ['Clairvoyance', 'Dispel Magic', 'Explosive Runes', 'Fireball', 'Fly', 'Gust of Wind', 'Haste', 'Hold Person', 'Infravision', "Invisibility 10' Radius", 'Lightning Bolt', 'Monster Summoning I', "Protection from Evil 10' Radius", 'Slow', 'Suggestion', 'Tongues', 'Water Breathing'],
+            4: ['Charm Monster', 'Confusion', 'Dimension Door', 'Enchanted Weapon', 'Extension I', 'Fear', 'Fire Charm', 'Ice Storm', 'Massmorph', 'Minor Globe of Invulnerability', 'Monster Summoning II', 'Polymorph Other', 'Polymorph Self', 'Remove Curse', 'Wall of Fire', 'Wizard Eye'],
+            5: ['Animate Dead', "Bigby's Interposing Hand", 'Cloudkill', 'Cone of Cold', 'Conjure Elemental', 'Feeblemind', 'Hold Monster', "Leomund's Secret Chest", 'Magic Jar', 'Monster Summoning III', 'Passwall', 'Telekinesis', 'Teleport', 'Wall of Force', 'Wall of Stone'],
+            6: ['Anti-Magic Shell', 'Chain Lightning', 'Contingency', 'Control Weather', 'Death Spell', 'Disintegrate', 'Enchant an Item', 'Extension II', 'Geas', 'Globe of Invulnerability', 'Invisible Stalker', 'Lower Water', 'Monster Summoning IV', 'Move Earth', 'Projected Image', 'Stone to Flesh', 'True Seeing']
+        },
+        'illusionist': {
+            1: ['Audible Glamer', 'Change Self', 'Color Spray', 'Darkness', 'Detect Illusion', 'Gaze Reflection', 'Hypnotism', 'Light', 'Phantasmal Force', 'Spook', 'Wall of Fog'],
+            2: ['Blindness', 'Blur', 'Fog Cloud', 'Hypnotic Pattern', 'Improved Phantasmal Force', 'Invisibility', 'Magic Mouth', 'Misdirection', 'Mirror Image', "Nystul's Magic Aura", 'Rope Trick', 'Whispering Wind'],
+            3: ['Continual Darkness', 'Dispel Illusion', 'Fear', 'Illusionary Script', "Invisibility 10' Radius", 'Non-Detection', 'Paralyzation', 'Phantom Steed', 'Spectral Force', 'Suggestion', 'Wraithform'],
+            4: ['Confusion', 'Dispel Magic', 'Emotion', 'Hallucinatory Terrain', 'Improved Invisibility', 'Massmorph', 'Minor Creation', 'Phantasmal Killer', 'Rainbow Pattern', 'Shadow Monsters'],
+            5: ['Advanced Illusion', 'Demi-Shadow Monsters', 'Dream', 'Major Creation', 'Maze', 'Projected Image', 'Shadow Door', 'Shadow Magic', 'Summon Shadow', 'Tempus Fugit'],
+            6: ['Death Fog', 'Mislead', 'Permanent Illusion', 'Programmed Illusion', 'Shades', 'Shadow Walk', 'True Sight', 'Veil']
+        },
+        'cleric': {
+            1: ['Command', 'Create Water', 'Cure Light Wounds', 'Detect Evil', 'Detect Magic', 'Detect Snares & Pits', 'Endure Cold', 'Light', 'Protection from Evil', 'Purify Food & Drink', 'Remove Fear', 'Resist Cold'],
+            2: ['Aid', 'Augury', 'Find Traps', 'Hold Person', 'Know Alignment', 'Resist Fire', "Silence 15' Radius", 'Slow Poison', 'Snake Charm', 'Speak with Animals', 'Spiritual Hammer', 'Wyvern Watch'],
+            3: ['Continual Light', 'Cure Blindness', 'Cure Disease', 'Dispel Magic', 'Glyph of Warding', 'Locate Object', "Protection from Evil 10' Radius", 'Remove Curse', 'Remove Paralysis', 'Speak with Dead', 'Striking', 'Water Walk'],
+            4: ['Cure Serious Wounds', 'Detect Lie', 'Divination', 'Exorcise', 'Neutralize Poison', 'Protection from Lightning', 'Speak with Plants', 'Spell Immunity', 'Tongues'],
+            5: ['Atonement', 'Cure Critical Wounds', 'Dispel Evil', 'Flame Strike', 'Insect Plague', 'Plane Shift', 'Quest', 'True Seeing'],
+            6: ['Animate Object', 'Blade Barrier', 'Find the Path', 'Forbiddance', 'Heal', 'Part Water', 'Speak with Monsters', 'Word of Recall']
+        },
+        'druid': {
+            1: ['Animal Friendship', 'Detect Magic', 'Detect Snares & Pits', 'Entangle', 'Faerie Fire', 'Locate Animals', 'Obscurement', 'Pass without Trace', 'Predict Weather', 'Produce Flame', 'Purify Water', 'Shillelagh', 'Speak with Animals'],
+            2: ['Barkskin', 'Charm Person or Mammal', 'Find Plants', 'Flame Blade', 'Goodberry', 'Heat Metal', 'Know Alignment', 'Locate Object', 'Produce Fire', 'Slow Poison', 'Warp Wood'],
+            3: ['Call Lightning', 'Cure Disease', 'Hold Animal', 'Protection from Fire', 'Pyrotechnics', 'Snare', 'Speak with Plants', 'Stone Shape', 'Water Breathing'],
+            4: ["Control Temperature 10' Radius", 'Cure Serious Wounds', 'Dispel Magic', 'Hallucinatory Forest', 'Neutralize Poison', 'Plant Door', 'Protection from Lightning', 'Sticks to Snakes'],
+            5: ['Animal Growth', 'Anti-Plant Shell', 'Control Winds', 'Insect Plague', 'Pass Plant', 'Transmute Rock to Mud', 'Wall of Fire', 'Wall of Thorns'],
+            6: ['Anti-Animal Shell', 'Conjure Fire Elemental', 'Fire Seeds', 'Heal', 'Liveoak', 'Transport via Plants', 'Turn Wood', 'Weather Summoning']
+        }
+    };
+
+    function stateInit() {
+        if (!state[STATE]) {
+            state[STATE] = {
+                version: VERSION,
+                currentDay: 0,
+                nextSageId: 1,
+                nextQuestionId: 1,
+                nextHireQuoteId: 1,
+                sages: [],
+                questions: [],
+                hireQuotes: []
+            };
+        }
+        state[STATE].version = VERSION;
+        state[STATE].currentDay = Number(state[STATE].currentDay) || 0;
+        state[STATE].nextSageId = Number(state[STATE].nextSageId) || 1;
+        state[STATE].nextQuestionId = Number(state[STATE].nextQuestionId) || 1;
+        state[STATE].nextHireQuoteId = Number(state[STATE].nextHireQuoteId) || 1;
+        state[STATE].sages = state[STATE].sages || [];
+        state[STATE].questions = state[STATE].questions || [];
+        state[STATE].hireQuotes = state[STATE].hireQuotes || [];
+        _.each(state[STATE].sages, function (sage) {
+            sage.cooldownUntilDay = Number(sage.cooldownUntilDay) || 0;
+            sage.restUntilDay = Number(sage.restUntilDay) || 0;
+            sage.restDaysRequired = Number(sage.restDaysRequired) || 0;
+            sage.restWarning = sage.restWarning || '';
+            if (sage.shortTerm) {
+                sage.shortTerm.paidThroughDay = Number(sage.shortTerm.paidThroughDay) || 0;
+                sage.shortTerm.totalPaidDays = Number(sage.shortTerm.totalPaidDays) || 0;
+                sage.shortTerm.daysUsed = Number(sage.shortTerm.daysUsed) || 0;
+                sage.shortTerm.extensionCount = Number(sage.shortTerm.extensionCount) || 0;
+                if (!_.isArray(sage.shortTerm.questionIds)) sage.shortTerm.questionIds = [];
+            }
+        });
+        _.each(state[STATE].questions, function (q) {
+            q.sourceKind = q.sourceKind || 'sage';
+            q.readyDay = Number(q.readyDay) || 0;
+            q.createdDay = Number(q.createdDay) || 0;
+            q.timeRoll = Number(q.timeRoll) || 0;
+            q.pcResearch = !!q.pcResearch || q.sourceKind === 'library';
+        });
+    }
+
+    function esc(s) {
+        return String(s === undefined || s === null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function normalizeText(s) {
+        return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    function slugify(s) {
+        return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    }
+
+    function parseArgs(content) {
+        var args = {};
+        var i = 0;
+        var len = (content || '').length;
+        var keyStart, keyEnd, key, valStart, depth, ch;
+        content = String(content || '');
+
+        while (i < len) {
+            i = content.indexOf('--', i);
+            if (i === -1) break;
+            i += 2;
+            keyStart = i;
+            while (i < len && !/\s|\|/.test(content.charAt(i))) i += 1;
+            keyEnd = i;
+            key = content.substring(keyStart, keyEnd);
+            if (!key) continue;
+            if (content.charAt(i) !== '|') {
+                args[key] = 'yes';
+                continue;
+            }
+            i += 1;
+            valStart = i;
+            depth = 0;
+            while (i < len) {
+                ch = content.charAt(i);
+                if (ch === '{') depth += 1;
+                else if (ch === '}' && depth > 0) depth -= 1;
+                if (depth === 0 && ch === ' ' && content.substr(i + 1, 2) === '--') break;
+                i += 1;
+            }
+            args[key] = content.substring(valStart, i).trim();
+        }
+        return args;
+    }
+
+    function send(msg) {
+        sendChat(SCRIPT, '/direct ' + msg);
+    }
+
+    function sendGM(msg) {
+        sendChat(SCRIPT, '/w gm ' + msg);
+    }
+
+    function whisperToPlayer(playerid, msg) {
+        var player = getObj('player', playerid);
+        if (!player) {
+            send(msg);
+            return;
+        }
+        var name = String(player.get('_displayname') || 'player').replace(/\(GM\)/g, '').trim();
+        name = name.replace(/"/g, '\"');
+        sendChat(SCRIPT, '/w "' + name + '" ' + msg);
+    }
+
+    function box(title, body) {
+        return '<div style="background:' + CONFIG.colors.panelBg + ';border:1px solid ' + CONFIG.colors.panelBorder + ';padding:8px;color:' + CONFIG.colors.text + ';max-width:560px;">' +
+            '<div style="font-weight:bold;font-size:18px;margin-bottom:6px;">' + esc(title) + '</div>' +
+            body + '</div>';
+    }
+
+    function line(label, value) {
+        return '<div style="margin:2px 0;"><b>' + esc(label) + ':</b> ' + value + '</div>';
+    }
+
+    function menuBtn(label, command, bg, border, width) {
+        width = width || 110;
+        return '<a style="display:inline-block;text-align:center;margin:2px;padding:4px 6px;min-width:' + width +
+            'px;background:' + bg + ';border:1px solid ' + border + ';color:#fff;text-decoration:none;border-radius:3px;" href="' +
+            esc(command) + '">' + esc(label) + '</a>';
+    }
+
+    function menuSection(title, buttons) {
+        return '<div style="margin-top:8px;border-top:1px solid #444;padding-top:6px;">' +
+            '<div style="font-weight:bold;color:' + CONFIG.colors.subtext + ';margin-bottom:4px;">' + esc(title) + '</div>' +
+            buttons.join(' ') + '</div>';
+    }
+
+    function backMenuButton(pcId) {
+        return '<div style="margin-top:8px;">' +
+            menuBtn('Main Menu', '!sage-menu' + (pcId ? ' --pc|' + pcId : ''), CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 100) +
+            '</div>';
+    }
+
+    function randomIntegerInclusive(min, max) {
+        return randomInteger(max - min + 1) + min - 1;
+    }
+
+    function randomPick(arr) {
+        arr = arr || [];
+        if (!arr.length) return '';
+        return arr[randomInteger(arr.length) - 1];
+    }
+
+    function selectedCharacter(msg) {
+        if (!msg.selected || !msg.selected.length) return null;
+        var tok = getObj('graphic', msg.selected[0]._id);
+        if (!tok) return null;
+        var charId = tok.get('represents');
+        if (!charId) return null;
+        return getObj('character', charId);
+    }
+
+    function resolveEmployer(msg, args) {
+        var ch = selectedCharacter(msg);
+        if (ch) return ch;
+        if (args.pc) return getObj('character', args.pc);
+        return null;
+    }
+
+    function employerName(ch) {
+        return ch ? (ch.get('name') || 'Employer') : 'Employer';
+    }
+
+    function getAttrObj(charId, name) {
+        var obj = findObjs({ type: 'attribute', characterid: charId, name: name })[0];
+        if (!obj) obj = createObj('attribute', { characterid: charId, name: name, current: 0 });
+        return obj;
+    }
+
+    function getAttr(charId, name, defVal) {
+        var obj = findObjs({ type: 'attribute', characterid: charId, name: name })[0];
+        if (!obj) return defVal;
+        var v = obj.get('current');
+        return v === '' || v === undefined || v === null ? defVal : v;
+    }
+
+    function setAttr(charId, name, val) {
+        getAttrObj(charId, name).set('current', val);
+    }
+
+    function coinSummary(charId) {
+        return {
+            gp: Number(getAttr(charId, CONFIG.coinAttrs.gp, 0)) || 0,
+            sp: Number(getAttr(charId, CONFIG.coinAttrs.sp, 0)) || 0,
+            cp: Number(getAttr(charId, CONFIG.coinAttrs.cp, 0)) || 0
+        };
+    }
+
+    function cpTotal(charId) {
+        var c = coinSummary(charId);
+        return (c.gp * 100) + (c.sp * 10) + c.cp;
+    }
+
+    function gpToCp(gp) {
+        return Math.round((Number(gp) || 0) * 100);
+    }
+
+    function formatCoinsFromCp(totalCp) {
+        totalCp = Math.max(0, Math.floor(totalCp || 0));
+        var gp = Math.floor(totalCp / 100);
+        var rem = totalCp % 100;
+        var sp = Math.floor(rem / 10);
+        var cp = rem % 10;
+        var out = [];
+        if (gp) out.push(gp + ' gp');
+        if (sp) out.push(sp + ' sp');
+        if (cp || !out.length) out.push(cp + ' cp');
+        return out.join(', ');
+    }
+
+    function deductCoins(charId, cpCost) {
+        cpCost = Math.max(0, Math.floor(cpCost || 0));
+        var total = cpTotal(charId);
+        if (total < cpCost) return false;
+        var remain = total - cpCost;
+        setAttr(charId, CONFIG.coinAttrs.gp, Math.floor(remain / 100));
+        setAttr(charId, CONFIG.coinAttrs.sp, Math.floor((remain % 100) / 10));
+        setAttr(charId, CONFIG.coinAttrs.cp, remain % 10);
+        return true;
+    }
+
+    function getReactionBonus(charId) {
+        return Number(getAttr(charId, CONFIG.reactionAttr, 0)) || 0;
+    }
+
+    function makeSageId() {
+        var id = 'S' + state[STATE].nextSageId;
+        state[STATE].nextSageId += 1;
+        return id;
+    }
+
+    function makeQuestionId() {
+        var id = 'Q' + state[STATE].nextQuestionId;
+        state[STATE].nextQuestionId += 1;
+        return id;
+    }
+
+    function getSageById(id) {
+        return _.find(state[STATE].sages, function (s) { return s.id === id; }) || null;
+    }
+
+    function allQuestions() {
+        return state[STATE].questions;
+    }
+
+    function getQuestionById(id) {
+        return _.find(allQuestions(), function (q) { return q.id === id; }) || null;
+    }
+
+function makeHireQuoteId() {
+    var id = 'H' + state[STATE].nextHireQuoteId;
+    state[STATE].nextHireQuoteId += 1;
+    return id;
+}
+
+function allHireQuotes() {
+    return state[STATE].hireQuotes;
+}
+
+function getHireQuoteById(id) {
+    return _.find(allHireQuotes(), function (q) { return q.id === id; }) || null;
+}
+
+    function allSages() {
+        return state[STATE].sages;
+    }
+
+    function randomName() {
+        return randomPick(CONFIG.randomNames) + ' the Sage';
+    }
+
+    function randomAlignment() {
+        var roll = randomIntegerInclusive(1, 100);
+        var found = _.find(CONFIG.alignmentTable, function (row) { return roll <= row[0]; });
+        return found ? found[1] : 'Neutral';
+    }
+
+    function fieldKeys() {
+        return CONFIG.fieldOrder.slice();
+    }
+
+    function labelForField(key) {
+        return CONFIG.fields[key] ? CONFIG.fields[key].label : key;
+    }
+
+    function resolveFieldKey(raw) {
+        var txt = slugify(raw);
+        var found = _.find(fieldKeys(), function (k) {
+            return slugify(k) === txt || slugify(CONFIG.fields[k].label) === txt;
+        });
+        return found || null;
+    }
+
+    function resolveSpecialForField(fieldKey, raw) {
+        var field = CONFIG.fields[fieldKey];
+        if (!field) return null;
+        var txt = slugify(raw);
+        return _.find(field.specials, function (s) { return slugify(s) === txt; }) || null;
+    }
+
+    function rollMinorAndSpecialCounts() {
+        var roll = randomIntegerInclusive(1, 100);
+        if (roll <= 10) return { minorCount: 1, specialCount: 2 };
+        if (roll <= 30) return { minorCount: 1, specialCount: 3 };
+        if (roll <= 50) return { minorCount: 1, specialCount: 4 };
+        if (roll <= 70) return { minorCount: 2, specialCount: 2 };
+        if (roll <= 90) return { minorCount: 2, specialCount: 3 };
+        return { minorCount: 2, specialCount: 4 };
+    }
+
+    function rollStats() {
+        return {
+            strength: randomIntegerInclusive(1, 8) + 7,
+            intelligence: randomIntegerInclusive(1, 4) + 14,
+            wisdom: randomIntegerInclusive(1, 6) + 12,
+            dexterity: randomIntegerInclusive(1, 6) + randomIntegerInclusive(1, 6) + randomIntegerInclusive(1, 6),
+            constitution: randomIntegerInclusive(1, 6) + randomIntegerInclusive(1, 6) + 3,
+            charisma: randomIntegerInclusive(1, 6) + randomIntegerInclusive(1, 6) + 2
+        };
+    }
+
+    function constitutionBonus(score) {
+        score = Number(score) || 0;
+        if (score >= 15) return 1;
+        if (score <= 6) return -1;
+        return 0;
+    }
+
+    function rollHitPoints(conScore) {
+        var hp = 0;
+        var bonus = constitutionBonus(conScore);
+        var i;
+        for (i = 0; i < 8; i += 1) hp += randomIntegerInclusive(1, 4) + bonus;
+        return Math.max(1, hp);
+    }
+
+
+    function chooseDistinct(arr, count) {
+        var pool = (arr || []).slice();
+        var limit = Math.min(pool.length, Math.max(0, parseInt(count || 0, 10) || 0));
+        var i, j, tmp;
+        for (i = pool.length - 1; i > 0; i -= 1) {
+            j = randomIntegerInclusive(0, i);
+            tmp = pool[i];
+            pool[i] = pool[j];
+            pool[j] = tmp;
+        }
+        return pool.slice(0, limit);
+    }
+
+
+    function mapSageAgeToNpcAppearanceAge(ageCategory) {
+        var n = normalizeText(ageCategory || '');
+        if (n === 'old') return 'old';
+        if (n === 'venerable') return 'ancient';
+        return 'middle-aged';
+    }
+
+    function rollNpcTableResult(values) {
+        return randomPick(values || []);
+    }
+
+    function rollNpcSanity() {
+        var result = rollNpcTableResult(NPC_TABLES.sanity);
+        if (result === 'insane' || result === 'maniacal') {
+            result = rollNpcTableResult(NPC_TABLES.sanity);
+        }
+        return result;
+    }
+
+    function rollNpcMorals() {
+        var result = rollNpcTableResult(NPC_TABLES.morals);
+        if (result === 'perverted' || result === 'sadistic' || result === 'depraved') {
+            result = rollNpcTableResult(NPC_TABLES.morals);
+        }
+        return result;
+    }
+
+    function rollNpcPersonality() {
+        var styleRoll = randomIntegerInclusive(1, 8);
+        if (styleRoll <= 5) {
+            return { type: 'Average', trait: rollNpcTableResult(NPC_TABLES.personalityAverage) };
+        }
+        if (styleRoll <= 7) {
+            return { type: 'Extroverted', trait: rollNpcTableResult(NPC_TABLES.personalityExtroverted) };
+        }
+        return { type: 'Introverted', trait: rollNpcTableResult(NPC_TABLES.personalityIntroverted) };
+    }
+
+    function generateNpcProfileForSage(ageCategory) {
+        var personality = rollNpcPersonality();
+        var interest = rollNpcTableResult(NPC_TABLES.interests);
+        var collection = interest === 'collector' ? rollNpcTableResult(NPC_TABLES.collections) : '';
+        var profile = {
+            appearanceAge: mapSageAgeToNpcAppearanceAge(ageCategory),
+            appearanceGeneral: rollNpcTableResult(NPC_TABLES.appearanceGeneral),
+            sanity: rollNpcSanity(),
+            generalTendency: rollNpcTableResult(NPC_TABLES.generalTendencies),
+            personalityType: personality.type,
+            personalityTrait: personality.trait,
+            disposition: rollNpcTableResult(NPC_TABLES.disposition),
+            intellect: rollNpcTableResult(NPC_TABLES.intellect),
+            nature: rollNpcTableResult(NPC_TABLES.nature),
+            materialism: rollNpcTableResult(NPC_TABLES.materialism),
+            honesty: rollNpcTableResult(NPC_TABLES.honesty),
+            bravery: rollNpcTableResult(NPC_TABLES.bravery),
+            energy: rollNpcTableResult(NPC_TABLES.energy),
+            thrift: rollNpcTableResult(NPC_TABLES.thrift),
+            morals: rollNpcMorals(),
+            piety: rollNpcTableResult(NPC_TABLES.piety),
+            interest: interest,
+            collection: collection
+        };
+        profile.summary = [
+            'Appearance: ' + profile.appearanceGeneral,
+            'Tendency: ' + profile.generalTendency,
+            'Trait: ' + profile.personalityTrait
+        ].join(' | ');
+        return profile;
+    }
+
+    function buildRandomSage(overrides) {
+        overrides = overrides || {};
+        var counts = rollMinorAndSpecialCounts();
+        var major = resolveFieldKey(overrides.major) || randomPick(fieldKeys());
+        var remaining = _.reject(fieldKeys(), function (k) { return k === major; });
+        var minorList = parseList(overrides.minors || overrides.minor || '');
+        var minors = _.chain(minorList)
+            .map(resolveFieldKey)
+            .filter(function (k) { return !!k && k !== major; })
+            .uniq()
+            .value();
+        if (minors.length < counts.minorCount) {
+            minors = minors.concat(chooseDistinct(_.reject(remaining, function (k) { return _.contains(minors, k); }), counts.minorCount - minors.length));
+        }
+        minors = minors.slice(0, counts.minorCount);
+        var specialInput = parseList(overrides.specials || overrides.special || '');
+        var specials = _.chain(specialInput)
+            .map(function (s) { return resolveSpecialForField(major, s); })
+            .filter(function (s) { return !!s; })
+            .uniq()
+            .value();
+        if (specials.length < counts.specialCount) {
+            specials = specials.concat(chooseDistinct(_.reject(CONFIG.fields[major].specials, function (s) { return _.contains(specials, s); }), counts.specialCount - specials.length));
+        }
+        specials = specials.slice(0, counts.specialCount);
+        return finalizeSageData({
+            name: overrides.name || randomName(),
+            majorField: major,
+            minorFields: minors,
+            specialCategories: specials,
+            temporary: normalizeText(overrides.temporary) === 'yes',
+            alignment: overrides.alignment || randomAlignment(),
+            ageCategory: overrides.agecategory || randomAgeCategory(),
+            spellTypeOverride: overrides.spelltype || ''
+        });
+    }
+
+    function parseList(raw) {
+        return _.chain(String(raw || '').split(/[,;]/))
+            .map(function (s) { return normalizeText(s); })
+            .filter(function (s) { return !!s; })
+            .value();
+    }
+
+    function finalizeSageData(base) {
+        var stats = rollStats();
+        var finalAgeCategory = base.ageCategory || randomAgeCategory();
+        var spellType = determineSpellType(base.majorField, base.specialCategories || [], base.spellTypeOverride);
+        var maxSpellLevel = randomIntegerInclusive(1, 4) + 2;
+        var spellCasterLevel = spellCasterLevelForMaxSpell(maxSpellLevel, spellType);
+        var spellProfile = generateSpellLibrary(spellType, maxSpellLevel);
+        var npcProfile = generateNpcProfileForSage(finalAgeCategory);
+        return {
+            id: makeSageId(),
+            name: base.name,
+            majorField: base.majorField,
+            minorFields: base.minorFields || [],
+            specialCategories: base.specialCategories || [],
+            stats: stats,
+            alignment: base.alignment || randomAlignment(),
+            ageCategory: finalAgeCategory,
+            npcProfile: npcProfile,
+            hitPoints: rollHitPoints(stats.constitution),
+            spellType: spellType,
+            maxSpellLevel: maxSpellLevel,
+            spellCasterLevel: spellCasterLevel,
+            spellLibrary: spellProfile.library,
+            preparedSpells: spellProfile.prepared,
+            temporary: !!base.temporary,
+            createdDay: state[STATE].currentDay,
+            ownerId: '',
+            ownerName: '',
+            employment: 'available',
+            salaryGp: 0,
+            grantGp: 0,
+            materialsGp: 0,
+            efficiencyPct: 0,
+            monthlyDueDay: 0,
+            outsideFieldBonusPct: 0,
+            minorFieldBonusPct: 0,
+            activeStudy: null,
+            shortTerm: null,
+            cooldownUntilDay: 0,
+            hireRoll: 0,
+            salaryExpectationGp: 0,
+            grantExpectationGp: 0,
+            characterId: ''
+        };
+    }
+
+    function buildCustomSage(args) {
+        var major = resolveFieldKey(args.major);
+        if (!major) return { error: 'Choose a valid major field.' };
+        var minorKeys = [];
+        if (args.minor1) minorKeys.push(resolveFieldKey(args.minor1));
+        if (args.minor2) minorKeys.push(resolveFieldKey(args.minor2));
+        if (!minorKeys.length) {
+            minorKeys = _.chain(parseList(args.minors || args.minor || ''))
+                .map(resolveFieldKey)
+                .value();
+        }
+        minorKeys = _.chain(minorKeys)
+            .filter(function (k) { return !!k && k !== major; })
+            .uniq()
+            .value();
+        if (minorKeys.length !== 2) return { error: 'Custom sages must choose exactly two distinct minor fields.' };
+
+        var specials = [];
+        ['special1', 'special2', 'special3', 'special4'].forEach(function (key) {
+            if (args[key]) specials.push(resolveSpecialForField(major, args[key]));
+        });
+        if (!specials.length) {
+            specials = _.chain(parseList(args.specials || args.special || ''))
+                .map(function (s) { return resolveSpecialForField(major, s); })
+                .value();
+        }
+        specials = _.chain(specials).filter(function (s) { return !!s; }).uniq().value();
+        if (specials.length !== 4) return { error: 'Custom sages must choose exactly four distinct special categories in the major field.' };
+
+        return finalizeSageData({
+            name: args.name || randomName(),
+            majorField: major,
+            minorFields: minorKeys,
+            specialCategories: specials,
+            temporary: normalizeText(args.temporary) === 'yes',
+            alignment: args.alignment || randomAlignment(),
+            ageCategory: args.agecategory || randomAgeCategory(),
+            spellTypeOverride: args.spelltype || ''
+        });
+    }
+
+
+    function createCharacterForSage(sage) {
+        var char = createObj('character', { name: sage.name, controlledby: '', inplayerjournals: '' });
+        if (!char) return '';
+        setAttr(char.id, 'strength', sage.stats.strength);
+        setAttr(char.id, 'intelligence', sage.stats.intelligence);
+        setAttr(char.id, 'wisdom', sage.stats.wisdom);
+        setAttr(char.id, 'dexterity', sage.stats.dexterity);
+        setAttr(char.id, 'constitution', sage.stats.constitution);
+        setAttr(char.id, 'charisma', sage.stats.charisma);
+        setAttr(char.id, 'hp', sage.hitPoints);
+        setAttr(char.id, 'alignment', sage.alignment);
+        setAttr(char.id, 'sage_age_category', sage.ageCategory || 'Middle-Aged');
+        setAttr(char.id, 'sage_major_field', labelForField(sage.majorField));
+        setAttr(char.id, 'sage_minor_fields', _.map(sage.minorFields, labelForField).join(', '));
+        setAttr(char.id, 'sage_special_categories', sage.specialCategories.join(', '));
+        setAttr(char.id, 'sage_spell_type', sage.spellType);
+        setAttr(char.id, 'sage_max_spell_level', sage.maxSpellLevel);
+        setAttr(char.id, 'sage_spell_caster_level', sage.spellCasterLevel);
+        setAttr(char.id, 'sage_efficiency_pct', sage.efficiencyPct);
+        setAttr(char.id, 'sage_spell_library', formatSpellLibrary(sage.spellLibrary));
+        setAttr(char.id, 'sage_spells_ready', formatPreparedSpells(sage.preparedSpells));
+        if (sage.npcProfile) {
+            setAttr(char.id, 'sage_npc_appearance_age', sage.npcProfile.appearanceAge);
+            setAttr(char.id, 'sage_npc_appearance_general', sage.npcProfile.appearanceGeneral);
+            setAttr(char.id, 'sage_npc_sanity', sage.npcProfile.sanity);
+            setAttr(char.id, 'sage_npc_general_tendency', sage.npcProfile.generalTendency);
+            setAttr(char.id, 'sage_npc_personality_type', sage.npcProfile.personalityType);
+            setAttr(char.id, 'sage_npc_personality_trait', sage.npcProfile.personalityTrait);
+            setAttr(char.id, 'sage_npc_disposition', sage.npcProfile.disposition);
+            setAttr(char.id, 'sage_npc_intellect', sage.npcProfile.intellect);
+            setAttr(char.id, 'sage_npc_nature', sage.npcProfile.nature);
+            setAttr(char.id, 'sage_npc_materialism', sage.npcProfile.materialism);
+            setAttr(char.id, 'sage_npc_honesty', sage.npcProfile.honesty);
+            setAttr(char.id, 'sage_npc_bravery', sage.npcProfile.bravery);
+            setAttr(char.id, 'sage_npc_energy', sage.npcProfile.energy);
+            setAttr(char.id, 'sage_npc_thrift', sage.npcProfile.thrift);
+            setAttr(char.id, 'sage_npc_morals', sage.npcProfile.morals);
+            setAttr(char.id, 'sage_npc_piety', sage.npcProfile.piety);
+            setAttr(char.id, 'sage_npc_interest', sage.npcProfile.interest);
+            setAttr(char.id, 'sage_npc_collection', sage.npcProfile.collection || '');
+            setAttr(char.id, 'sage_npc_profile', sage.npcProfile.summary || '');
+        }
+        return char.id;
+    }
+
+    function updateCharacterForSage(sage) {
+        if (!sage.characterId) return;
+        var ch = getObj('character', sage.characterId);
+        if (!ch) return;
+        ch.set({ name: sage.name, controlledby: '', inplayerjournals: '' });
+        setAttr(ch.id, 'strength', sage.stats.strength);
+        setAttr(ch.id, 'intelligence', sage.stats.intelligence);
+        setAttr(ch.id, 'wisdom', sage.stats.wisdom);
+        setAttr(ch.id, 'dexterity', sage.stats.dexterity);
+        setAttr(ch.id, 'constitution', sage.stats.constitution);
+        setAttr(ch.id, 'charisma', sage.stats.charisma);
+        setAttr(ch.id, 'hp', sage.hitPoints);
+        setAttr(ch.id, 'alignment', sage.alignment);
+        setAttr(ch.id, 'sage_age_category', sage.ageCategory || 'Middle-Aged');
+        setAttr(ch.id, 'sage_major_field', labelForField(sage.majorField));
+        setAttr(ch.id, 'sage_minor_fields', _.map(sage.minorFields, labelForField).join(', '));
+        setAttr(ch.id, 'sage_special_categories', sage.specialCategories.join(', '));
+        setAttr(ch.id, 'sage_spell_type', sage.spellType);
+        setAttr(ch.id, 'sage_max_spell_level', sage.maxSpellLevel);
+        setAttr(ch.id, 'sage_spell_caster_level', sage.spellCasterLevel);
+        setAttr(ch.id, 'sage_efficiency_pct', sage.efficiencyPct);
+        setAttr(ch.id, 'sage_spell_library', formatSpellLibrary(sage.spellLibrary));
+        setAttr(ch.id, 'sage_spells_ready', formatPreparedSpells(sage.preparedSpells));
+        if (sage.npcProfile) {
+            setAttr(ch.id, 'sage_npc_appearance_age', sage.npcProfile.appearanceAge);
+            setAttr(ch.id, 'sage_npc_appearance_general', sage.npcProfile.appearanceGeneral);
+            setAttr(ch.id, 'sage_npc_sanity', sage.npcProfile.sanity);
+            setAttr(ch.id, 'sage_npc_general_tendency', sage.npcProfile.generalTendency);
+            setAttr(ch.id, 'sage_npc_personality_type', sage.npcProfile.personalityType);
+            setAttr(ch.id, 'sage_npc_personality_trait', sage.npcProfile.personalityTrait);
+            setAttr(ch.id, 'sage_npc_disposition', sage.npcProfile.disposition);
+            setAttr(ch.id, 'sage_npc_intellect', sage.npcProfile.intellect);
+            setAttr(ch.id, 'sage_npc_nature', sage.npcProfile.nature);
+            setAttr(ch.id, 'sage_npc_materialism', sage.npcProfile.materialism);
+            setAttr(ch.id, 'sage_npc_honesty', sage.npcProfile.honesty);
+            setAttr(ch.id, 'sage_npc_bravery', sage.npcProfile.bravery);
+            setAttr(ch.id, 'sage_npc_energy', sage.npcProfile.energy);
+            setAttr(ch.id, 'sage_npc_thrift', sage.npcProfile.thrift);
+            setAttr(ch.id, 'sage_npc_morals', sage.npcProfile.morals);
+            setAttr(ch.id, 'sage_npc_piety', sage.npcProfile.piety);
+            setAttr(ch.id, 'sage_npc_interest', sage.npcProfile.interest);
+            setAttr(ch.id, 'sage_npc_collection', sage.npcProfile.collection || '');
+            setAttr(ch.id, 'sage_npc_profile', sage.npcProfile.summary || '');
+        }
+    }
+
+    function efficiencyFromMaterials(materialsGp) {
+        materialsGp = Number(materialsGp) || 0;
+        if (materialsGp < 20000) return 0;
+        if (materialsGp <= 60000) {
+            return Math.min(90, 50 + Math.floor((materialsGp - 20000) / 1000));
+        }
+        return Math.min(100, 90 + Math.floor((materialsGp - 60000) / 4000));
+    }
+
+    function salaryExpectationFrom2d6() {
+        return (randomIntegerInclusive(1, 6) + randomIntegerInclusive(1, 6)) * 100;
+    }
+
+
+    function requirementListForMenu(excludeKeys) {
+        excludeKeys = excludeKeys || [];
+        return _.chain(fieldKeys())
+            .reject(function (k) { return _.contains(excludeKeys, k); })
+            .map(function (k) { return labelForField(k) + ',' + labelForField(k); })
+            .value()
+            .join('|');
+    }
+
+    function alignmentChoicesForQuery() {
+        return ['Chaotic Evil','Chaotic Good','Chaotic Neutral','Lawful Evil','Lawful Good','Lawful Neutral','Neutral','Neutral Evil','Neutral Good']
+            .map(function (a) { return a + ',' + a; })
+            .join('|');
+    }
+
+    function minorFieldChoicesForQuery(majorField) {
+        return requirementListForMenu([majorField]);
+    }
+
+    function specialChoicesForQuery(fieldKey) {
+        var field = CONFIG.fields[fieldKey];
+        if (!field) return '';
+        return _.map(field.specials, function (s) {
+            var display = s.replace(/,/g, ';');
+            return display + ',' + slugify(s);
+        }).join('|');
+    }
+
+    function randomAgeCategory() {
+        return randomPick(AGE_CATEGORIES);
+    }
+
+    function determineSpellType(majorField, specialCategories, explicitType) {
+        specialCategories = specialCategories || [];
+        explicitType = normalizeText(explicitType || '');
+        if (_.contains(['magic-user', 'illusionist', 'cleric', 'druid'], explicitType)) return explicitType;
+        if (majorField === 'flora' || majorField === 'fauna') return 'druid';
+        if (majorField === 'physical') return 'cleric';
+        if (majorField === 'supernatural') {
+            if (_.find(specialCategories, function (s) { return _.contains(SUPERNATURAL_MAGICUSER_SPECIALS, s); })) return 'magic-user';
+            return 'illusionist';
+        }
+        if (majorField === 'humankind' || majorField === 'demihumankind' || majorField === 'humanoids') {
+            if (_.find(specialCategories, function (s) { return _.contains(SPECIAL_CLERIC_OR_MAGICUSER, s); })) {
+                return randomIntegerInclusive(1, 2) === 1 ? 'cleric' : 'magic-user';
+            }
+            return 'cleric';
+        }
+        return 'cleric';
+    }
+
+    function spellCasterLevelForMaxSpell(maxSpellLevel, spellType) {
+        var map = {
+            'magic-user': { 3: 5, 4: 7, 5: 9, 6: 11 },
+            'illusionist': { 3: 5, 4: 7, 5: 9, 6: 11 },
+            cleric: { 3: 5, 4: 7, 5: 9, 6: 11 },
+            druid: { 3: 5, 4: 7, 5: 10, 6: 12 }
+        };
+        return (map[spellType] && map[spellType][maxSpellLevel]) || 5;
+    }
+
+    function generateSpellLibrary(spellType, maxSpellLevel) {
+        var pool = SPELL_POOLS[spellType] || {};
+        var library = {};
+        var prepared = {};
+        var lvl, available, chosen, count;
+        for (lvl = 1; lvl <= maxSpellLevel; lvl += 1) {
+            available = (pool[lvl] || []).slice();
+            if (!available.length) continue;
+            count = Math.min(available.length, randomIntegerInclusive(1, 4));
+            chosen = chooseDistinct(available, count);
+            library[lvl] = chosen;
+            prepared[lvl] = chosen[randomIntegerInclusive(0, chosen.length - 1)];
+        }
+        return { library: library, prepared: prepared };
+    }
+
+    function formatSpellLibrary(spellLibrary) {
+        return _.chain(_.keys(spellLibrary || {}))
+            .sortBy(function (k) { return Number(k) || 0; })
+            .map(function (k) { return 'L' + k + ': ' + (spellLibrary[k] || []).join(', '); })
+            .value()
+            .join(' | ');
+    }
+
+    function formatPreparedSpells(prepared) {
+        return _.chain(_.keys(prepared || {}))
+            .sortBy(function (k) { return Number(k) || 0; })
+            .map(function (k) { return 'L' + k + ': ' + prepared[k]; })
+            .value()
+            .join(' | ');
+    }
+
+    function askCommandForSage(pcId, sageId) {
+        return '!sage-ask --pc|' + pcId + ' --sage|' + sageId +
+            ' --relation|?{Field relation|Out of Fields,out|Minor Field,minor|Major Field,major|Special Category,special}' +
+            ' --nature|?{Question type|General,general|Specific,specific|Exacting,exacting}' +
+            ' --locale|?{Town or city near research?|Near,near|Remote,remote}' +
+            ' --question|?{Question text|What do you ask?}';
+    }
+
+    function pcResearchCommand(pcId) {
+        return '!sage-pc-research-start --pc|' + pcId +
+            ' --size|?{Library size|Small,small|Medium,medium|Large,large}' +
+            ' --relation|?{Field relation|In Field,in|Out of Field,out}' +
+            ' --nature|?{Question type|General,general|Specific,specific|Exacting,exacting}' +
+            ' --question|?{Question text|What do you research?}';
+    }
+
+    function reportActionButtonsForSage(sage, employer) {
+    if (!employer) return '';
+    var buttons = [];
+    if (sage.employment === 'permanent' && sage.ownerId === employer.id) {
+        if (!sage.activeStudy) buttons.push(menuBtn('Use Sage', askCommandForSage(employer.id, sage.id), CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 85));
+        buttons.push(menuBtn('Study', '!sage-study-menu --pc|' + employer.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 75));
+    } else if (sage.shortTerm && sage.shortTerm.employerId === employer.id) {
+        if (!sage.activeStudy && employerCanConsultSageNow(employer, sage)) buttons.push(menuBtn('Use Sage', askCommandForSage(employer.id, sage.id), CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 85));
+        buttons.push(menuBtn('End Short-Term', '!sage-end-shortterm --pc|' + employer.id + ' --sage|' + sage.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110));
+    } else if (!sage.activeStudy && sage.cooldownUntilDay <= state[STATE].currentDay && sage.employment !== 'permanent' && !sage.shortTerm) {
+        buttons.push(menuBtn('Hire Short-Term', '!sage-begin-shortterm --pc|' + employer.id + ' --sage|' + sage.id + ' --days|?{How many days?|1|2|3|4|5|6|7}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 115));
+        buttons.push(menuBtn('Hire Long-Term', '!sage-offer-employment --pc|' + employer.id + ' --sage|' + sage.id +
+            ' --salarygp|?{Salary per month in gp|700}' +
+            ' --grantgp|?{Research grant per month in gp|700}' +
+            ' --materialsgp|?{Initial material expenditure in gp|20000}', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 110));
+    }
+    return buttons.join(' ');
+}
+
+    function fieldRelationLabel(key) {
+        return {
+            in: 'In Field',
+            out: 'Out of Fields',
+            minor: 'Minor Field',
+            major: 'Major Field',
+            special: 'Special Category'
+        }[key] || key;
+    }
+
+    function natureLabel(key) {
+        return {
+            general: 'General',
+            specific: 'Specific',
+            exacting: 'Exacting'
+        }[key] || key;
+    }
+
+    function employmentLabel(sage) {
+        if (sage.employment === 'permanent') return 'Permanent';
+        if (sage.shortTerm) {
+            return 'Employed by ' + sage.shortTerm.employerName + ' (' + shortTermDaysRemainingDisplay(sage) + ' day(s) left)';
+        }
+        if (sageIsResting(sage)) return 'Resting (' + sageRestDaysRemaining(sage) + ' day(s))';
+        if (sage.cooldownUntilDay > state[STATE].currentDay) return 'Resting (' + sageRestDaysRemaining(sage) + ' day(s))';
+        return 'Available';
+    }
+
+    function sageLabel(sage) {
+        return sage.name + ' (' + labelForField(sage.majorField) + ')';
+    }
+
+    function questionTimeLabel(q) {
+        var roll;
+        var unit;
+        if (!q) return '';
+        roll = Math.max(0, Number(q.timeRoll) || 0);
+        unit = String(q.timeUnit || 'days');
+        if (roll === 1) {
+            if (unit === 'days') unit = 'day';
+            else if (unit === 'hours') unit = 'hour';
+            else if (unit === 'rounds') unit = 'round';
+        }
+        return roll + ' ' + unit;
+    }
+
+    function questionExactTimeLabel(q) {
+        return questionTimeLabel(q);
+    }
+
+    function questionApproximateDays(q) {
+        if (!q) return 0;
+        if (q.timeUnit === 'rounds') return 1;
+        if (q.timeUnit === 'hours') return 1;
+        return Math.max(1, Number(q.timeRoll) || 0);
+    }
+
+    function questionBroadTimeFrameLabel(q) {
+        return questionTimeLabel(q);
+    }
+
+    function questionResearchStatusLabel(q) {
+        if (!q) return '';
+        if (q.status === 'researching') return 'Research in progress';
+        if (q.status === 'ready') return q.sourceKind === 'library' ? 'Research complete' : 'Ready for follow-up';
+        if (q.status === 'answered') return 'Answered';
+        if (q.status === 'quote') return 'Awaiting payment';
+        return q.status;
+    }
+
+    function questionSourceLabel(q) {
+        return q && q.sourceKind === 'library' ? 'PC Research' : 'Sage Research';
+    }
+
+    function sageIsResting(sage) {
+        return !!(sage && Number(sage.restUntilDay) > state[STATE].currentDay);
+    }
+
+    function restDaysForQuestion(q) {
+        if (!q || q.sourceKind !== 'sage') return 0;
+        if (q.timeUnit !== 'days') return 0;
+        if ((Number(q.timeRoll) || 0) <= 1) return 0;
+        return Math.max(1, Math.ceil((Number(q.timeRoll) || 0) / 3));
+    }
+
+    function sageRestMessage(sage) {
+        if (!sageIsResting(sage)) return '';
+        return 'This sage is resting for ' + sageRestDaysRemaining(sage) + ' more day(s). Only general questions may be taken during this rest.';
+    }
+
+    function activePcResearchForEmployer(employer) {
+        if (!employer) return null;
+        return _.find(allQuestions(), function (q) {
+            return q.sourceKind === 'library' && q.employerId === employer.id && q.status === 'researching';
+        }) || null;
+    }
+
+    function blockedByPcResearchText(employer) {
+        var q = activePcResearchForEmployer(employer);
+        if (!q) return '';
+        return 'This character is occupied with PC library research on "' + q.question + '" and cannot begin other research through this system until it is complete.';
+    }
+
+    function pcResearchResultText(q) {
+        if (!q) return '';
+        if (q.status !== 'ready') return 'Library research is still underway.';
+        if (!q.intSuccess) return 'Research complete. The intelligence check failed, and no useful answer was found.';
+        if (!q.known) return 'Research complete. No useful answer was found.';
+        return 'Research complete. Useful information was found; consult the GM for the discovered details.';
+    }
+
+    function pcResearchIntelligenceTarget(employer, relation) {
+        var base = Number(getAttr(employer.id, CONFIG.intelligenceAttr, 0)) || 0;
+        if (relation === 'out') base -= 4;
+        return Math.max(1, Math.min(20, base));
+    }
+
+    function createPcResearchRecord(employer, args) {
+        var relation = normalizeRelationKey(args.relation);
+        var nature = normalizeNatureKey(args.nature);
+        var sizeKey = normalizeText(args.size || 'medium');
+        var size = CONFIG.pcResearch.librarySizes[sizeKey];
+        var range = CONFIG.pcResearch.knowledgeTable[relation] && CONFIG.pcResearch.knowledgeTable[relation][nature];
+        var discovery = CONFIG.pcResearch.discoveryTable[relation] && CONFIG.pcResearch.discoveryTable[relation][nature];
+        var baseChance;
+        var effectiveChance;
+        var knowRoll;
+        var intTarget;
+        var intRoll;
+        var intSuccess;
+        var timeRoll;
+        if (!size || !range || !discovery) return { error: 'That PC research combination is not valid.' };
+        intTarget = pcResearchIntelligenceTarget(employer, relation);
+        if (!(Number(getAttr(employer.id, CONFIG.intelligenceAttr, 0)) || 0)) {
+            return { error: 'The employer character needs a numeric "' + CONFIG.intelligenceAttr + '" attribute for PC research.' };
+        }
+        baseChance = randomIntegerInclusive(range[0], range[1]);
+        effectiveChance = Math.max(0, Math.min(100, baseChance + (Number(size.chanceMod) || 0)));
+        knowRoll = randomIntegerInclusive(1, 100);
+        intRoll = randomIntegerInclusive(1, 20);
+        intSuccess = intRoll <= intTarget;
+        timeRoll = Math.max(1, Math.ceil(randomIntegerInclusive(discovery.min, discovery.max) * (Number(size.timeMultiplier) || 1)));
+        return {
+            id: makeQuestionId(),
+            sourceKind: 'library',
+            pcResearch: true,
+            employerId: employer.id,
+            employerName: employerName(employer),
+            researcherName: employerName(employer),
+            sageId: '',
+            sageName: 'Research Library (PC)',
+            relation: relation,
+            nature: nature,
+            question: args.question || 'Unnamed question',
+            answerText: '',
+            baseChance: baseChance,
+            effectiveChance: effectiveChance,
+            knowRoll: knowRoll,
+            known: intSuccess && knowRoll <= effectiveChance,
+            intRoll: intRoll,
+            intTarget: intTarget,
+            intSuccess: intSuccess,
+            timeRoll: timeRoll,
+            timeUnit: discovery.unit,
+            billableDays: timeRoll,
+            totalCostGp: 0,
+            currentCostGp: 0,
+            paidCostGp: 0,
+            shortTermBaseGp: 0,
+            materialsCostGp: 0,
+            remote: false,
+            noExtraCost: true,
+            quotedDay: state[STATE].currentDay,
+            createdDay: state[STATE].currentDay,
+            readyDay: state[STATE].currentDay + timeRoll,
+            employmentType: 'library',
+            finalStatus: 'researching',
+            status: 'researching',
+            librarySize: sizeKey,
+            librarySizeLabel: size.label,
+            haggleAttempts: 0,
+            haggleFailures: 0,
+            haggleDone: true,
+            refused: false,
+            insulted: false
+        };
+    }
+
+    function normalizeRelationKey(value) {
+        value = normalizeText(value);
+        return {
+            infield: 'in',
+            infields: 'in',
+            in: 'in',
+            outoffields: 'out',
+            outoffield: 'out',
+            outsidefields: 'out',
+            outsidefield: 'out',
+            out: 'out',
+            minorfield: 'minor',
+            minor: 'minor',
+            majorfield: 'major',
+            major: 'major',
+            specialcategory: 'special',
+            special: 'special'
+        }[value] || value;
+    }
+
+    function normalizeNatureKey(value) {
+        value = normalizeText(value);
+        return {
+            general: 'general',
+            specific: 'specific',
+            exacting: 'exacting'
+        }[value] || value;
+    }
+
+    function normalizeLocaleKey(value) {
+        value = normalizeText(value);
+        return {
+            near: 'near',
+            yes: 'near',
+            remote: 'remote',
+            no: 'remote'
+        }[value] || value;
+    }
+
+    function isRemoteResearch(args) {
+        return normalizeLocaleKey(args.locale) === 'remote' || normalizeLocaleKey(args.town) === 'remote';
+    }
+
+    function computeEffectiveChance(sage, relation, nature, baseChance) {
+        var chance = baseChance;
+        if (sage.employment === 'permanent') {
+            if (nature === 'specific' || nature === 'exacting') {
+                chance = Math.floor(chance * (Number(sage.efficiencyPct) || 0) / 100);
+            }
+            if (relation === 'out') chance += Number(sage.outsideFieldBonusPct) || 0;
+            if (relation === 'minor') chance += Number(sage.minorFieldBonusPct) || 0;
+        }
+        return Math.max(0, Math.min(100, chance));
+    }
+
+    function low20Threshold(range) {
+        var size = (range[1] - range[0]) + 1;
+        var width = Math.max(1, Math.ceil(size * 0.2));
+        return range[0] + width - 1;
+    }
+
+    function createQuestionRecord(employer, sage, args) {
+    var relation = normalizeRelationKey(args.relation);
+    var nature = normalizeNatureKey(args.nature);
+    var range = CONFIG.knowledgeTable[relation] && CONFIG.knowledgeTable[relation][nature];
+    var discovery = CONFIG.discoveryTable[relation] && CONFIG.discoveryTable[relation][nature];
+    if (!range || !discovery) return { error: 'That relation/question type combination is not valid for sage rules.' };
+
+    var baseChance = randomIntegerInclusive(range[0], range[1]);
+    var effectiveChance = computeEffectiveChance(sage, relation, nature, baseChance);
+    var knowRoll = randomIntegerInclusive(1, 100);
+    var known = knowRoll <= effectiveChance;
+    var remote = isRemoteResearch(args);
+    var timeRoll = randomIntegerInclusive(discovery.min, discovery.max);
+    var timeUnit = discovery.unit;
+
+    if (remote && timeUnit === 'days') timeRoll *= 2;
+
+    return {
+        id: makeQuestionId(),
+        sourceKind: 'sage',
+        employerId: employer.id,
+        employerName: employerName(employer),
+        reactionBonus: getReactionBonus(employer.id),
+        sageId: sage.id,
+        sageName: sage.name,
+        relation: relation,
+        nature: nature,
+        question: args.question || 'Unnamed question',
+        answerText: '',
+        baseChance: baseChance,
+        effectiveChance: effectiveChance,
+        knowRoll: knowRoll,
+        known: known,
+        timeRoll: timeRoll,
+        timeUnit: timeUnit,
+        billableDays: timeUnit === 'days' ? timeRoll : 0,
+        totalCostGp: 0,
+        currentCostGp: sage.employment === 'permanent' ? 0 : (discovery.costGpPerDay * (remote ? 2 : 1)),
+        paidCostGp: 0,
+        shortTermBaseGp: 0,
+        materialsCostGp: sage.employment === 'permanent' ? 0 : (discovery.costGpPerDay * (remote ? 2 : 1)),
+        remote: remote,
+        noExtraCost: sage.employment === 'permanent',
+        quotedDay: state[STATE].currentDay,
+        createdDay: state[STATE].currentDay,
+        readyDay: state[STATE].currentDay + (timeUnit === 'days' ? timeRoll : 0),
+        employmentType: sage.employment === 'permanent' ? 'permanent' : 'shortterm',
+        finalStatus: timeUnit === 'days' ? 'researching' : 'ready',
+        status: sage.employment === 'permanent' ? (timeUnit === 'days' ? 'researching' : 'ready') : 'quote',
+        haggleAttempts: 0,
+        haggleFailures: 0,
+        haggleDone: sage.employment === 'permanent',
+        refused: false,
+        insulted: false
+    };
+}
+
+    function canBeginShortTerm(sage, employer) {
+    if (sage.employment === 'permanent') return { ok: false, msg: 'This sage is permanently employed.' };
+    if (sage.cooldownUntilDay > state[STATE].currentDay) {
+        return { ok: false, msg: 'This sage is resting for ' + sageRestDaysRemaining(sage) + ' more day(s).' };
+    }
+    if (sage.activeStudy) {
+        return { ok: false, msg: 'This sage is in uninterrupted study and cannot be questioned.' };
+    }
+    if (!sage.shortTerm) return { ok: true };
+    if (sage.shortTerm.employerId !== employer.id) {
+        return { ok: false, msg: 'This sage is already employed by ' + sage.shortTerm.employerName + ' for ' + shortTermDaysRemainingDisplay(sage) + ' more day(s).' };
+    }
+    return { ok: true };
+}
+
+    function ensureShortTermSession(sage, employer, paidDays) {
+    var addDays = Math.max(0, Number(paidDays) || 0);
+    if (!sage.shortTerm) {
+        sage.shortTerm = {
+            employerId: employer.id,
+            employerName: employerName(employer),
+            startDay: state[STATE].currentDay,
+            paidThroughDay: state[STATE].currentDay + addDays,
+            totalPaidDays: addDays,
+            daysUsed: 0,
+            extensionCount: 0,
+            questionIds: []
+        };
+        return;
+    }
+    sage.shortTerm.daysUsed = Math.max(0, Number(sage.shortTerm.daysUsed) || 0);
+    sage.shortTerm.totalPaidDays = Math.max(0, Number(sage.shortTerm.totalPaidDays) || 0);
+    sage.shortTerm.extensionCount = Math.max(0, Number(sage.shortTerm.extensionCount) || 0);
+    if (!_.isArray(sage.shortTerm.questionIds)) sage.shortTerm.questionIds = [];
+    if (sage.shortTerm.employerId === employer.id && addDays) {
+        sage.shortTerm.paidThroughDay = Math.max(state[STATE].currentDay, Number(sage.shortTerm.paidThroughDay) || 0) + addDays;
+        sage.shortTerm.totalPaidDays += addDays;
+        sage.shortTerm.extensionCount += 1;
+    }
+}
+
+    function shortTermResearchingQuestion(sage) {
+    return _.find(allQuestions(), function (q) {
+        return q.sageId === sage.id && q.employmentType === 'shortterm' && q.status === 'researching';
+    });
+}
+
+    function shortTermReadyQuestion(sage) {
+    return _.find(allQuestions(), function (q) {
+        return q.sageId === sage.id && q.employmentType === 'shortterm' && q.status === 'ready';
+    });
+}
+
+    function employerCanCollectReadyAnswer(employer, sage, question) {
+    if (!employer || !sage || !question || question.sourceKind !== 'sage') return false;
+    if (question.employerId !== employer.id || question.sageId !== sage.id || question.status !== 'ready') return false;
+    if (sage.employment === 'permanent') return sage.ownerId === employer.id;
+    return !!(sage.shortTerm && sage.shortTerm.employerId === employer.id && (shortTermActiveToday(sage) || !!shortTermReadyQuestion(sage)));
+}
+
+function shortTermDaysRemaining(sage) {
+    if (!sage || !sage.shortTerm) return 0;
+    return Math.max(0, (Number(sage.shortTerm.paidThroughDay) || 0) - state[STATE].currentDay);
+}
+
+function shortTermActiveToday(sage) {
+    if (!sage || !sage.shortTerm) return false;
+    return state[STATE].currentDay <= (Number(sage.shortTerm.paidThroughDay) || 0);
+}
+
+function remainingDaysUntil(targetDay) {
+    return Math.max(0, (Number(targetDay) || 0) - state[STATE].currentDay);
+}
+
+function remainingInclusiveDaysUntil(targetDay) {
+    return Math.max(0, ((Number(targetDay) || 0) - state[STATE].currentDay) + 1);
+}
+
+function shortTermDaysRemainingDisplay(sage) {
+    if (!sage || !sage.shortTerm) return 0;
+    return remainingInclusiveDaysUntil(sage.shortTerm.paidThroughDay);
+}
+
+function sageLockedByOtherEmployer(sage, employer) {
+    return !!(sage && sage.shortTerm && employer && sage.shortTerm.employerId !== employer.id && shortTermActiveToday(sage));
+}
+
+function sageRestDaysRemaining(sage) {
+    if (!sage) return 0;
+    if (sageIsResting(sage)) return remainingDaysUntil(sage.restUntilDay);
+    if ((Number(sage.cooldownUntilDay) || 0) > state[STATE].currentDay) return remainingDaysUntil(sage.cooldownUntilDay);
+    return 0;
+}
+
+function employerCanConsultSageNow(employer, sage) {
+    if (!employer || !sage) return false;
+    if (sage.employment === 'permanent') return sage.ownerId === employer.id;
+    return !!(sage.shortTerm && sage.shortTerm.employerId === employer.id && shortTermActiveToday(sage));
+}
+
+function finishShortTermIfIdle(sage) {
+    if (!sage || !sage.shortTerm) return;
+    if (shortTermResearchingQuestion(sage) || shortTermReadyQuestion(sage)) return;
+    if (state[STATE].currentDay <= (Number(sage.shortTerm.paidThroughDay) || 0)) return;
+    sage.cooldownUntilDay = state[STATE].currentDay + CONFIG.cooldownDaysAfterShortTerm;
+    sage.shortTerm = null;
+}
+
+    function hireEligibilityRoll(reactionBonus) {
+        return randomIntegerInclusive(1, 10) + randomIntegerInclusive(1, 10) + reactionBonus;
+    }
+
+
+    function buildMainMenu(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var pcArg = employer ? ' --pc|' + employer.id : '';
+    var body = '';
+    if (employer) {
+        body += line('Employer', esc(employerName(employer)));
+        body += line('Coins', esc(formatCoinsFromCp(cpTotal(employer.id))));
+        body += line('Reaction Bonus', String(getReactionBonus(employer.id)));
+    } else {
+        body += '<div style="margin-bottom:6px;color:' + CONFIG.colors.subtext + ';">Select an employer token first. You can still manage sages and review the roster.</div>';
+    }
+
+    body += menuSection('1. Sage Roster', [
+        menuBtn('Add Sages', '!sage-add-menu' + pcArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 110),
+        menuBtn('Choose Available Sages', '!sage-report' + pcArg, CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 170),
+        menuBtn('Study / Library Upgrade', '!sage-study-menu' + pcArg, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 145),
+        menuBtn('Remove Sage', '!sage-remove-list' + pcArg, CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 100)
+    ]);
+
+    body += menuSection('2. Questions & Research', [
+        menuBtn('Ask Sage Question', '!sage-ask-menu' + pcArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 130),
+        menuBtn('PC Research', '!sage-pc-research-menu' + pcArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 105),
+        menuBtn('Pending Research', '!sage-open-questions' + pcArg, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 120)
+    ]);
+
+    body += menuSection('3. Information', [
+        menuBtn('How Sages Work', '!sage-how-sages-work' + pcArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 135),
+        menuBtn('PC Research Rules', '!sage-pc-research-rules' + pcArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 135),
+        menuBtn('Chance of Knowing', '!sage-chance-chart' + pcArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 135),
+        menuBtn('Research Time & Cost', '!sage-time-chart' + pcArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 145)
+    ]);
+
+    body += menuSection('4. Timekeeping', [
+        menuBtn('Apply Days', '!sage-apply-days' + pcArg + ' --days|?{Days passed|1}', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 95),
+        menuBtn('Apply Months', '!sage-apply-months' + pcArg + ' --months|?{Months passed|1}', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 100)
+    ]);
+
+    if (playerIsGM(msg.playerid)) {
+        body += menuSection('5. GM', [
+            menuBtn('Answer Now', '!sage-open-questions' + pcArg, CONFIG.colors.gmBg, CONFIG.colors.gmBorder, 110),
+            menuBtn('Reset Campaign', '!sage-reset --confirm|?{Reset all sage data?|No,no|Yes,yes}', CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 130)
+        ]);
+    }
+
+    send(box('Sage Menu', body));
+}
+
+function handleAddMenu(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var pcArg = employer ? ' --pc|' + employer.id : '';
+    var buttons = [
+        menuBtn('Add Random Sage', '!sage-add-random' + pcArg + ' --name|?{Sage name|'+ randomName() + '}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 130),
+        menuBtn('Add Temporary Sage', '!sage-add-random' + pcArg + ' --temporary|yes --name|?{Temporary sage name|' + randomName() + '}', CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 135)
+    ];
+    if (playerIsGM(msg.playerid)) {
+        buttons.push(menuBtn('Add Custom Sage', '!sage-add-custom-menu' + pcArg, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 130));
+    }
+    send(box('Add Sages', buttons.join(' ') + backMenuButton(employer ? employer.id : '')));
+}
+    function handleAddCustomMenu(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        if (!playerIsGM(msg.playerid)) {
+            send(box('Custom Sage', '<div>Only the GM can create custom sages.</div>' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        send(box('Custom Sage - Step 1',
+            '<div style="margin-bottom:6px;">Custom sages use GM-selected values, always with the maximum 2 minor fields and 4 special categories.</div>' +
+            '<div style="margin-bottom:8px;">First choose the basics, then the script will present drop-down menus for the two minor fields and four special categories.</div>' +
+            menuBtn('Choose Basics', '!sage-add-custom-fields' + (employer ? ' --pc|' + employer.id : '') +
+                ' --name|?{Sage name|' + randomName() + '}' +
+                ' --major|?{Major field|' + requirementListForMenu() + '}' +
+                ' --alignment|?{Alignment|' + alignmentChoicesForQuery() + '}' +
+                ' --temporary|?{Employment|Permanent,no|Temporary,yes}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 140) +
+            backMenuButton(employer ? employer.id : '')
+        ));
+    }
+
+    function handleAddCustomFields(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        if (!playerIsGM(msg.playerid)) {
+            send(box('Custom Sage', '<div>Only the GM can create custom sages.</div>' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        var major = resolveFieldKey(args.major);
+        if (!major) {
+            send(box('Custom Sage', '<div>Choose a valid major field first.</div>' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        var minorChoices = minorFieldChoicesForQuery(major);
+        var specialChoices = specialChoicesForQuery(major);
+        send(box('Custom Sage - Step 2',
+            line('Major Field', esc(labelForField(major))) +
+            '<div style="margin:6px 0;">Choose exactly two distinct minor fields and four distinct special categories.</div>' +
+            menuBtn('Create Custom Sage', '!sage-add-custom' + (employer ? ' --pc|' + employer.id : '') +
+                ' --name|' + esc(args.name || randomName()) +
+                ' --major|' + esc(labelForField(major)) +
+                ' --alignment|' + esc(args.alignment || 'Neutral') +
+                ' --temporary|' + esc(args.temporary || 'no') +
+                ' --minor1|?{Minor field 1|' + minorChoices + '}' +
+                ' --minor2|?{Minor field 2|' + minorChoices + '}' +
+                ' --special1|?{Special category 1|' + specialChoices + '}' +
+                ' --special2|?{Special category 2|' + specialChoices + '}' +
+                ' --special3|?{Special category 3|' + specialChoices + '}' +
+                ' --special4|?{Special category 4|' + specialChoices + '}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 150) +
+            backMenuButton(employer ? employer.id : '')
+        ));
+    }
+
+    function handleAddRandom(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var sage = buildRandomSage(args);
+    if (normalizeText(args.sheet) !== 'no') sage.characterId = createCharacterForSage(sage);
+    allSages().push(sage);
+    send(box('Sage Added',
+        line('Name', esc(sage.name)) +
+        line('Major Field', esc(labelForField(sage.majorField))) +
+        line('Availability', esc(sage.temporary ? 'Temporary / one-off' : 'Available')) +
+        line('NPC Persona', esc(sage.npcProfile ? sage.npcProfile.summary : 'Generated')) +
+        (sage.characterId ? line('Character Sheet', esc('Created')) : '') +
+        backMenuButton(employer ? employer.id : '')
+    ));
+}
+
+    function handleAddCustom(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    if (!playerIsGM(msg.playerid)) {
+        send(box('Custom Sage', '<div>Only the GM can create custom sages.</div>' + backMenuButton(employer ? employer.id : '')));
+        return;
+    }
+    var built = buildCustomSage(args);
+    if (built.error) {
+        send(box('Custom Sage', '<div>' + esc(built.error) + '</div>' + backMenuButton(employer ? employer.id : '')));
+        return;
+    }
+    if (normalizeText(args.sheet) !== 'no') built.characterId = createCharacterForSage(built);
+    allSages().push(built);
+    send(box('Custom Sage Added',
+        line('Name', esc(built.name)) +
+        line('Major Field', esc(labelForField(built.majorField))) +
+        line('Availability', esc(built.temporary ? 'Temporary / one-off' : 'Available')) +
+        line('NPC Persona', esc(built.npcProfile ? built.npcProfile.summary : 'Generated')) +
+        (built.characterId ? line('Character Sheet', esc('Created')) : '') +
+        backMenuButton(employer ? employer.id : '')
+    ));
+}
+
+    function sageButtons(filterFn, commandBuilder, emptyText) {
+        var sages = _.filter(allSages(), filterFn || function () { return true; });
+        sages = _.sortBy(sages, function (s) { return (s.name || '').toLowerCase(); });
+        if (!sages.length) return '<div>' + esc(emptyText || 'No sages found.') + '</div>';
+        return _.map(sages, function (s) {
+            return '<div style="margin-bottom:6px;">' +
+                '<b>' + esc(sageLabel(s)) + '</b> — ' + esc(employmentLabel(s)) + ' ' + commandBuilder(s) +
+                '<br><span style="color:' + CONFIG.colors.subtext + ';">' + esc(sageKnowledgeSummary(s)) + '</span>' +
+                '</div>';
+        }).join('');
+    }
+
+
+
+
+    function sageKnowledgeSummary(sage) {
+    var parts = [];
+    parts.push('Major Field: ' + labelForField(sage.majorField));
+    if (sage.specialCategories && sage.specialCategories.length) {
+        parts.push('Special Categories: ' + sage.specialCategories.join(', '));
+    }
+    if (sage.minorFields && sage.minorFields.length) {
+        parts.push('Minor Fields: ' + _.map(sage.minorFields, labelForField).join(', '));
+    }
+    return parts.join(' | ');
+}
+
+    function handleHowSagesWork(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var body = '<div style="margin-bottom:6px;">Sages are consulted using the 1e DMG procedure.</div>' +
+        '<div style="margin-bottom:6px;"><b>Short-Term Employment:</b> Any class can consult a sage for up to 7 days. Short-term service costs 100 gp per day, and each question also has a separate research charge based on the question difficulty. After short-term work ends, the sage rests for at least 1 game month.</div>' +
+        '<div style="margin-bottom:6px;"><b>Question Procedure:</b> Choose the sage, enter the question, select field relation, question type, and whether research is near a town/city or remote. Remote research doubles variable research cost, and it doubles research time when the result is measured in days.</div>' +
+        '<div style="margin-bottom:6px;"><b>Haggling:</b> Each quote allows up to two haggle attempts. A success lowers the quoted cost by 5%. If the second haggle attempt fails, the quoted cost increases by 10%.</div>' +
+        '<div style="margin-bottom:6px;"><b>Answer Timing:</b> Players are shown the exact research time rolled by the system, such as 4 days or 1 hour. When the GM decides the sage is ready to answer during play, the GM uses <b>Answer Now</b>.</div>' +
+        '<div style="margin-bottom:6px;"><b>Missed Deadlines:</b> If research is finished but the short-term hire expires, the question stays on file. Rehire the sage later to collect the answer.</div>' +
+        '<div style="margin-bottom:6px;"><b>Availability:</b> A sage can only be employed by one character at a time. The roster shows whether the sage is employed or resting and how many days remain.</div>' +
+        '<div style="margin-bottom:6px;"><b>Rest And Recuperation:</b> After a question that required more than 1 day of research is answered, the sage warns the party and rests for at least 1 day per 3 days of research. During this rest, only general questions should be asked.</div>' +
+        '<div style="margin-top:8px;">' +
+            menuBtn('Chance of Knowing', '!sage-chance-chart' + (employer ? ' --pc|' + employer.id : ''), CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 135) +
+            menuBtn('Research Time & Cost', '!sage-time-chart' + (employer ? ' --pc|' + employer.id : ''), CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 145) +
+        '</div>' +
+        backMenuButton(employer ? employer.id : '');
+    send(box('How Sages Work', body));
+}
+
+    function handleChanceChart(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var body =
+        '<div style="margin-bottom:6px;"><b>Chance of Knowing Answer to a Question</b></div>' +
+        line('Out of Fields', 'General 31%-50%; Specific 11%-20%; Exacting —') +
+        line('In Minor Field', 'General 46%-65%; Specific 31%-40%; Exacting 11%-20%') +
+        line('In Major Field', 'General 61%-80%; Specific 57%-60%; Exacting 26%-35%') +
+        line('In Special Category', 'General 81%-100%; Specific 76%-96%; Exacting 61%-80%') +
+        '<div style="margin-top:6px;color:' + CONFIG.colors.subtext + ';">The script rolls this secretly. Players use this chart only as general guidance.</div>' +
+        backMenuButton(employer ? employer.id : '');
+    send(box('Chance of Knowing', body));
+}
+
+    function handleTimeChart(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var body =
+        '<div style="margin-bottom:6px;"><b>Information Discovery Time and Cost Table</b></div>' +
+        line('Out of Fields', 'General 1-6 rounds; Specific 2-24 days; Exacting —; Cost 100 gp/day') +
+        line('In Minor Field', 'General 1-4 rounds; Specific 2-20 days; Exacting 5-40 days; Cost 1,000 gp/day') +
+        line('In Major Field', 'General 1-3 rounds; Specific 1-12 days; Exacting 3-30 days; Cost 500 gp/day') +
+        line('In Special Category', 'General 1-2 rounds; Specific 1-10 hours; Exacting 2-12 days; Cost 200 gp/day') +
+        '<div style="margin-top:6px;color:' + CONFIG.colors.subtext + ';">Remote research doubles variable cost, and it doubles the time when the result is measured in days.</div>' +
+        backMenuButton(employer ? employer.id : '');
+    send(box('Research Time & Cost', body));
+}
+
+    function handlePcResearchRules(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var body =
+        '<div style="margin-bottom:6px;"><b>Research Library (PC)</b> is a house-rule system for player characters doing their own library work.</div>' +
+        '<div style="margin-bottom:6px;"><b>Procedure:</b> Choose library size, field relation, question type, and enter the question. The script rolls a hidden research chance and a separate intelligence check using the employer\'s <b>' + esc(CONFIG.intelligenceAttr) + '</b> attribute.</div>' +
+        '<div style="margin-bottom:6px;"><b>Intelligence Check:</b> Roll 1d20 equal to or under intelligence. Out-of-field research applies a -4 penalty to this target.</div>' +
+        '<div style="margin-bottom:6px;"><b>Library Size Modifiers:</b> Small library -10% chance and slower time; Medium library no modifier; Large library +10% chance and faster time.</div>' +
+        '<div style="margin-bottom:6px;"><b>Time:</b> Pending Research shows the rolled research time, such as 4 days or 1 hour.</div>' +
+        '<div style="margin-bottom:6px;"><b>Restriction:</b> While PC library research is in progress, this script blocks starting other research for that character.</div>' +
+        backMenuButton(employer ? employer.id : '');
+    send(box('PC Research Rules', body));
+}
+
+    function publicReportBody(employer, includeActions) {
+    var body = '';
+    if (employer) body += line('Employer', esc(employerName(employer)));
+    body += '<div style="margin-top:6px;"><b>Sages</b></div>';
+    body += allSages().length ? _.map(_.sortBy(allSages(), function (s) { return (s.name || '').toLowerCase(); }), function (s) {
+        var parts = [];
+        var statusNotes = [];
+        parts.push('<div style="margin-left:8px;margin-bottom:8px;">');
+        parts.push('<b>' + esc(s.name) + '</b> — ' + esc(labelForField(s.majorField)) + ' — ' + esc(employmentLabel(s)));
+        parts.push('<br><span style="color:' + CONFIG.colors.subtext + ';">' + esc(sageKnowledgeSummary(s)) + '</span>');
+        if (s.shortTerm) {
+            statusNotes.push('Short-Term Employer: ' + s.shortTerm.employerName + ' (' + shortTermDaysRemainingDisplay(s) + ' day(s) remaining)');
+        }
+        if (sageIsResting(s)) {
+            statusNotes.push('Resting: ' + sageRestDaysRemaining(s) + ' more day(s)');
+        } else if ((Number(s.cooldownUntilDay) || 0) > state[STATE].currentDay) {
+            statusNotes.push('Resting: ' + sageRestDaysRemaining(s) + ' more day(s)');
+        }
+        if (s.employment === 'permanent' && s.ownerId) {
+            var owner = getObj('character', s.ownerId);
+            statusNotes.push('Permanent Employer: ' + (owner ? owner.get('name') : 'another character'));
+        }
+        if (statusNotes.length) parts.push('<br><span style="color:' + CONFIG.colors.subtext + ';">' + esc(statusNotes.join(' | ')) + '</span>');
+        if (includeActions) {
+            var actionButtons = reportActionButtonsForSage(s, employer);
+            if (actionButtons) parts.push('<div style="margin-top:4px;">' + actionButtons + '</div>');
+        }
+        parts.push('</div>');
+        return parts.join('');
+    }).join('') : '<div style="margin-left:8px;">none</div>';
+    return body;
+}
+
+    function gmReportBody(employer) {
+    return publicReportBody(employer, true);
+}
+
+    function handleReport(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var body = '<div style="margin-bottom:6px;">Review the sage roster below. Only sages marked available can be newly hired. A sage employed by another character is blocked until that employment ends.</div>';
+    body += publicReportBody(employer, true);
+    body += backMenuButton(employer ? employer.id : '');
+    send(box('Choose Available Sages', body));
+}
+
+    function handleReportPublic(msg, args) {
+    return handleReport(msg, args);
+}
+
+    function handleRemoveList(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        send(box('Remove Sage',
+            sageButtons(null, function (s) {
+                return menuBtn('Remove', '!sage-remove' + (employer ? ' --pc|' + employer.id : '') + ' --sage|' + s.id, CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 80);
+            }, 'No sages found.') + backMenuButton(employer ? employer.id : '')
+        ));
+    }
+
+    function handleRemove(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        var sage = getSageById(args.sage);
+        if (!sage) {
+            send(box('Remove Sage', '<div>Sage not found.</div>' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        state[STATE].questions = _.reject(allQuestions(), function (q) { return q.sageId === sage.id; });
+        state[STATE].sages = _.reject(allSages(), function (s) { return s.id === sage.id; });
+        send(box('Remove Sage', '<div>Sage removed: <b>' + esc(sage.name) + '</b></div>' + backMenuButton(employer ? employer.id : '')));
+    }
+
+    function handleBeginShortTermMenu(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    if (!employer) {
+        send(box('Hire Short-Term Sage', 'Select an employer token first.' + backMenuButton('')));
+        return;
+    }
+    if (activePcResearchForEmployer(employer)) {
+        send(box('Hire Short-Term Sage', '<div>' + esc(blockedByPcResearchText(employer)) + '</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    send(box('Hire Short-Term Sage',
+        '<div style="margin-bottom:6px;">Choose a sage, then choose how many days you need: 1 to 7. Payment is made up front.</div>' +
+        sageButtons(function (s) {
+            return s.employment !== 'permanent' && !s.activeStudy && (!s.shortTerm || s.shortTerm.employerId === employer.id) && s.cooldownUntilDay <= state[STATE].currentDay;
+        }, function (s) {
+            return menuBtn('Hire Short-Term', '!sage-begin-shortterm --pc|' + employer.id + ' --sage|' + s.id + ' --days|?{How many days?|1|2|3|4|5|6|7}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 115);
+        }, 'No available sages for short-term service.') +
+        backMenuButton(employer.id)
+    ));
+}
+
+function buildHireQuote(employer, sage, kind, data) {
+    data = data || {};
+    return {
+        id: makeHireQuoteId(),
+        kind: kind,
+        employerId: employer.id,
+        employerName: employerName(employer),
+        sageId: sage.id,
+        sageName: sage.name,
+        reactionBonus: getReactionBonus(employer.id),
+        status: 'quote',
+        haggleAttempts: 0,
+        haggleFailures: 0,
+        haggleDone: false,
+        insulted: false,
+        refused: false,
+        currentCostGp: Math.max(0, parseInt(data.currentCostGp || 0, 10)),
+        days: Math.max(0, parseInt(data.days || 0, 10)),
+        salaryGp: Math.max(0, parseInt(data.salaryGp || 0, 10)),
+        grantGp: Math.max(0, parseInt(data.grantGp || 0, 10)),
+        materialsGp: Math.max(0, parseInt(data.materialsGp || 0, 10)),
+        reactionRoll: data.reactionRoll || 0,
+        favorable: !!data.favorable,
+        salaryExpectationGp: Math.max(0, parseInt(data.salaryExpectationGp || 0, 10)),
+        grantExpectationGp: Math.max(0, parseInt(data.grantExpectationGp || 0, 10)),
+        linkedQuestionId: data.linkedQuestionId || ''
+    };
+}
+
+function removeHireQuote(id) {
+    state[STATE].hireQuotes = _.reject(allHireQuotes(), function (q) { return q.id === id; });
+}
+
+function hireQuoteTitle(quote) {
+    if (quote.kind === 'shortterm') return 'Short-Term Sage Quote';
+    if (quote.kind === 'longterm') return 'Long-Term Sage Quote';
+    if (quote.kind === 'extension') return 'Short-Term Extension Quote';
+    return 'Sage Quote';
+}
+
+function renderHireQuote(quote, employer, extraText) {
+    var body = line('Employer', esc(quote.employerName)) +
+        line('Sage', esc(quote.sageName));
+    if (quote.kind === 'shortterm') {
+        body += line('Hire Type', 'Short-Term');
+        body += line('Days', String(quote.days));
+    } else if (quote.kind === 'longterm') {
+        body += line('Hire Type', 'Long-Term');
+        body += line('Salary', esc(quote.salaryGp + ' gp/month'));
+        body += line('Grant', esc(quote.grantGp + ' gp/month'));
+        body += line('Materials', esc(quote.materialsGp + ' gp'));
+    } else if (quote.kind === 'extension') {
+        body += line('Hire Type', 'Short-Term Extension');
+        body += line('Additional Days', String(quote.days));
+    }
+    body += line('Quoted Cost', esc(quote.currentCostGp + ' gp'));
+    if (extraText) body += '<div style="margin-top:6px;">' + extraText + '</div>';
+    body += '<div style="margin-top:8px;">' +
+        menuBtn('Accept Quote / Pay', '!sage-accept-hirequote --pc|' + employer.id + ' --quote|' + quote.id, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 140) +
+        (!(quote.haggleDone || (quote.haggleAttempts || 0) >= 2) ? menuBtn('Haggle Price', '!sage-haggle-hirequote --pc|' + employer.id + ' --quote|' + quote.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) : '') +
+        menuBtn('Deny Quote', '!sage-deny-hirequote --pc|' + employer.id + ' --quote|' + quote.id, CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 100) +
+        '</div>' +
+        backMenuButton(employer.id);
+    send(box(hireQuoteTitle(quote), body));
+}
+
+        function handleBeginShortTerm(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var sage = getSageById(args.sage);
+    var days = Math.max(1, Math.min(CONFIG.shortTermMaxDays, parseInt(args.days || 1, 10)));
+    var quote;
+    if (!employer || !sage) {
+        send(box('Hire Short-Term Sage', 'Employer or sage not found.' + backMenuButton(employer ? employer.id : '')));
+        return;
+    }
+    if (activePcResearchForEmployer(employer)) {
+        send(box('Hire Short-Term Sage', '<div>' + esc(blockedByPcResearchText(employer)) + '</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    var ok = canBeginShortTerm(sage, employer);
+    if (!ok.ok) {
+        send(box('Hire Short-Term Sage', '<div>' + esc(ok.msg) + '</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    quote = buildHireQuote(employer, sage, 'shortterm', {
+        days: days,
+        currentCostGp: CONFIG.shortTermBaseGpPerDay * days
+    });
+    allHireQuotes().push(quote);
+    renderHireQuote(quote, employer, 'Payment is made up front for the sage\'s daily fee. Each short-term question still has its own DMG research charge quote.');
+}
+
+    function handleAskMenu(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    if (!employer) {
+        send(box('Ask Sage Question', 'Select an employer token first.' + backMenuButton('')));
+        return;
+    }
+    if (activePcResearchForEmployer(employer)) {
+        send(box('Ask Sage Question', '<div>' + esc(blockedByPcResearchText(employer)) + '</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    send(box('Ask Sage Question',
+        '<div style="margin-bottom:6px;">Choose a sage already hired by this employer. Short-term sages must have paid time remaining or an active research question still in progress.</div>' +
+        sageButtons(function (s) {
+            return (s.employment === 'permanent' && s.ownerId === employer.id) ||
+                (s.shortTerm && s.shortTerm.employerId === employer.id);
+        }, function (s) {
+            return menuBtn('Ask', askCommandForSage(employer.id, s.id), CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 80);
+        }, 'No hired sages are ready to answer questions for this employer.') +
+        backMenuButton(employer.id)
+    ));
+}
+
+    function handleAsk(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var sage = getSageById(args.sage);
+    var q;
+    var extensionDays;
+    var extensionQuote;
+    if (!employer || !sage) {
+        send(box('Ask Sage Question', 'Employer or sage not found.' + backMenuButton(employer ? employer.id : '')));
+        return;
+    }
+    if (activePcResearchForEmployer(employer)) {
+        send(box('Ask Sage Question', '<div>' + esc(blockedByPcResearchText(employer)) + '</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    if (sage.activeStudy) {
+        send(box('Ask Sage Question', '<div>This sage is in uninterrupted study and cannot be questioned.</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    if (sage.employment === 'permanent') {
+        if (sage.ownerId !== employer.id) {
+            send(box('Ask Sage Question', '<div>This sage is permanently employed by another character.</div>' + backMenuButton(employer.id)));
+            return;
+        }
+    } else {
+        if (!sage.shortTerm || sage.shortTerm.employerId !== employer.id) {
+            send(box('Ask Sage Question', '<div>Hire this sage short-term first.</div>' + backMenuButton(employer.id)));
+            return;
+        }
+        if (!employerCanConsultSageNow(employer, sage)) {
+            finishShortTermIfIdle(sage);
+            send(box('Ask Sage Question', '<div>This short-term hire has run out of paid time. The rest period starts after any question already in progress is completed.</div>' + backMenuButton(employer.id)));
+            return;
+        }
+    }
+
+    if (sageIsResting(sage) && normalizeNatureKey(args.nature) !== 'general') {
+        send(box('Ask Sage Question',
+            line('Sage', esc(sage.name)) +
+            '<div>' + esc(sageRestMessage(sage)) + '</div>' +
+            backMenuButton(employer.id)
+        ));
+        return;
+    }
+
+    q = createQuestionRecord(employer, sage, args);
+    if (q.error) {
+        send(box('Ask Sage Question', '<div>' + esc(q.error) + '</div>' + backMenuButton(employer.id)));
+        return;
+    }
+
+    if (q.employmentType === 'shortterm' && q.timeUnit === 'days' && q.readyDay > (Number(sage.shortTerm.paidThroughDay) || 0)) {
+        allQuestions().push(q);
+        q.status = 'extensionquote';
+        extensionDays = Math.max(7, Math.ceil((q.readyDay - (Number(sage.shortTerm.paidThroughDay) || 0)) / 7) * 7);
+        extensionQuote = buildHireQuote(employer, sage, 'extension', {
+            days: extensionDays,
+            currentCostGp: CONFIG.shortTermBaseGpPerDay * extensionDays,
+            linkedQuestionId: q.id
+        });
+        allHireQuotes().push(extensionQuote);
+        renderHireQuote(extensionQuote, employer,
+            'This question needs more time than remains on the current short-term hire. An additional block of paid time is required before the sage can continue.');
+        return;
+    }
+
+    allQuestions().push(q);
+    if (q.employmentType === 'shortterm' && sage.shortTerm && !_.contains(sage.shortTerm.questionIds, q.id)) sage.shortTerm.questionIds.push(q.id);
+    updateCharacterForSage(sage);
+
+    if (q.status === 'quote') {
+        send(box('Sage Question Quote',
+            line('Employer', esc(employerName(employer))) +
+            line('Sage', esc(sage.name)) +
+            line('Question', esc(q.question)) +
+            line('Field Relation', esc(fieldRelationLabel(q.relation))) +
+            line('Question Type', esc(natureLabel(q.nature))) +
+            line('Time Frame', esc(questionBroadTimeFrameLabel(q))) +
+            line('Quoted Cost', esc(q.currentCostGp + ' gp')) +
+            (q.remote ? line('Remote Research', 'Yes — time and variable cost doubled') : '') +
+            '<div style="margin-top:6px;">This is the DMG variable research charge for the question. The daily short-term hire fee is already separate.</div>' +
+            '<div style="margin-top:8px;">' +
+                menuBtn('Accept Quote / Pay', '!sage-accept-question --pc|' + employer.id + ' --question|' + q.id, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 140) +
+                (!(q.haggleDone || (q.haggleAttempts || 0) >= 2) ? menuBtn('Haggle Price', '!sage-haggle-question --pc|' + employer.id + ' --question|' + q.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) : '') +
+                menuBtn('Deny Quote', '!sage-deny-question --pc|' + employer.id + ' --question|' + q.id, CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 100) +
+            '</div>' +
+            backMenuButton(employer.id)
+        ));
+        return;
+    }
+
+    if (q.status === 'ready') {
+        var readyNowBtn = (playerIsGM(msg.playerid) && employerCanCollectReadyAnswer(employer, sage, q))
+            ? '<div style="margin-top:8px;">' + menuBtn('Answer Now', '!sage-set-answer --pc|' + employer.id + ' --question|' + q.id + ' --text|?{GM answer text|}', CONFIG.colors.gmBg, CONFIG.colors.gmBorder, 95) + '</div>'
+            : '';
+        send(box('Sage Question Ready',
+            line('Employer', esc(employerName(employer))) +
+            line('Sage', esc(sage.name)) +
+            line('Question', esc(q.question)) +
+            line('Time Frame', esc(questionBroadTimeFrameLabel(q))) +
+            '<div style="margin-top:6px;">The sage is ready to give the answer to this completed question when the GM decides to speak during play.</div>' +
+            readyNowBtn +
+            backMenuButton(employer.id)
+        ));
+        return;
+    }
+
+    send(box('Sage Research Begun',
+        line('Employer', esc(employerName(employer))) +
+        line('Sage', esc(sage.name)) +
+        line('Question', esc(q.question)) +
+        line('Time Frame', esc(questionBroadTimeFrameLabel(q))) +
+        '<div style="margin-top:6px;">Research begins. Check Pending Research later. The GM uses <b>Answer Now</b> when the sage is ready to answer during play.</div>' +
+        backMenuButton(employer.id)
+    ));
+}
+
+    function handleAcceptQuestion(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        var q = getQuestionById(args.question);
+        var sage;
+        var costGp;
+        var body;
+        if (!employer || !q || q.employerId !== employer.id) {
+            send(box('Sage Question', 'Question quote not found for this employer.' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        if (q.status !== 'quote') {
+            send(box('Sage Question', '<div>This question quote is no longer awaiting payment.</div>' + backMenuButton(employer.id)));
+            return;
+        }
+        sage = getSageById(q.sageId);
+        if (!sage) {
+            send(box('Sage Question', '<div>Sage not found.</div>' + backMenuButton(employer.id)));
+            return;
+        }
+        if (q.employmentType === 'shortterm') {
+            ensureShortTermSession(sage, employer);
+            if ((sage.shortTerm.daysUsed || 0) + q.billableDays > CONFIG.shortTermMaxDays) {
+                send(box('Sage Question',
+                    line('Sage', esc(sage.name)) +
+                    '<div>This quote would exceed the 7-day short-term limit for this sage.</div>' +
+                    line('Days Used', String(sage.shortTerm.daysUsed || 0)) +
+                    line('Days Needed', String(q.billableDays)) +
+                    backMenuButton(employer.id)
+                ));
+                return;
+            }
+        }
+        costGp = Math.max(0, parseInt(q.currentCostGp || 0, 10));
+        if (costGp > 0 && !deductCoins(employer.id, gpToCp(costGp))) {
+            send(box('Sage Question',
+                line('Employer', esc(employerName(employer))) +
+                line('Cost Due', esc(costGp + ' gp')) +
+                '<div>Not enough coin on the employer sheet.</div>' +
+                backMenuButton(employer.id)
+            ));
+            return;
+        }
+        q.paidCostGp = costGp;
+        q.totalCostGp = costGp;
+        q.createdDay = state[STATE].currentDay;
+        q.readyDay = state[STATE].currentDay + (q.timeUnit === 'days' ? q.timeRoll : 0);
+        q.status = q.finalStatus || (q.timeUnit === 'days' ? 'researching' : 'ready');
+        q.paidDay = state[STATE].currentDay;
+        if (q.employmentType === 'shortterm') {
+            sage.shortTerm.daysUsed = Math.max(0, Number(sage.shortTerm.daysUsed) || 0) + q.billableDays;
+            if (!_.contains(sage.shortTerm.questionIds, q.id)) sage.shortTerm.questionIds.push(q.id);
+        }
+        updateCharacterForSage(sage);
+
+        if (q.status === 'ready') {
+            body = line('Employer', esc(employerName(employer))) +
+                line('Sage', esc(sage.name)) +
+                line('Question', esc(q.question)) +
+                line('Time Frame', esc(questionBroadTimeFrameLabel(q))) +
+                line('Paid', esc(q.paidCostGp + ' gp'));
+            body += '<div style="margin-top:6px;">The sage is ready to give the answer to this completed question. The GM uses <b>Answer Now</b> when ready to speak.</div>';
+            if (playerIsGM(msg.playerid) && employerCanCollectReadyAnswer(employer, sage, q)) {
+                body += '<div style="margin-top:8px;">' + menuBtn('Answer Now', '!sage-set-answer --pc|' + employer.id + ' --question|' + q.id + ' --text|?{GM answer text|}', CONFIG.colors.gmBg, CONFIG.colors.gmBorder, 95) + '</div>';
+            }
+            body += backMenuButton(employer.id);
+            send(box('Sage Question Ready', body));
+            return;
+        }
+
+        body = line('Employer', esc(employerName(employer))) +
+            line('Sage', esc(sage.name)) +
+            line('Question', esc(q.question)) +
+            line('Time Frame', esc(questionBroadTimeFrameLabel(q))) +
+            line('Paid', esc(q.paidCostGp + ' gp')) +
+            '<div style="margin-top:6px;">Research begins. Check Pending Research later. The GM uses <b>Answer Now</b> when the sage is ready to answer during play.</div>';
+        body += backMenuButton(employer.id);
+        send(box('Sage Research Begun', body));
+    }
+
+    function handleDenyQuestion(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        var q = getQuestionById(args.question);
+        if (q && q.status === 'quote') {
+            state[STATE].questions = _.reject(allQuestions(), function (row) { return row.id === q.id; });
+        }
+        send(box('Sage Question Quote', '<div>Quote removed.</div>' + backMenuButton(employer ? employer.id : '')));
+    }
+
+    function handleHaggleQuestion(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        var q = getQuestionById(args.question);
+        var target;
+        var roll;
+        var success;
+        var resultText;
+        var buttons = '';
+        if (!employer || !q || q.employerId !== employer.id) {
+            send(box('Haggle Sage Price', 'Question quote not found for this employer.' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        if (q.status !== 'quote') {
+            send(box('Haggle Sage Price', '<div>This quote is no longer open for haggling.</div>' + backMenuButton(employer.id)));
+            return;
+        }
+        if (q.haggleDone || (q.haggleAttempts || 0) >= 2) {
+            send(box('Haggle Sage Price',
+                line('Question', esc(q.question)) +
+                '<div>No more haggle attempts remain for this quote.</div>' +
+                backMenuButton(employer.id)
+            ));
+            return;
+        }
+        target = Math.max(0, Math.min(95, 10 + (Number(q.reactionBonus) || 0)));
+        roll = randomIntegerInclusive(1, 100);
+        success = roll <= target;
+        q.haggleAttempts = (q.haggleAttempts || 0) + 1;
+        if (success) {
+            q.currentCostGp = Math.max(0, Math.round((Number(q.currentCostGp) || 0) * 0.95));
+            q.haggleDone = true;
+            resultText = '<span style="color:#8fe38f;font-weight:bold;">Success - sage reduces the quoted charge by 5%.</span>';
+        } else {
+            q.haggleFailures = (q.haggleFailures || 0) + 1;
+            if ((q.haggleAttempts || 0) >= 2) {
+                q.currentCostGp = Math.max(0, Math.round((Number(q.currentCostGp) || 0) * 1.10));
+                q.haggleDone = true;
+                resultText = '<span style="color:#ffb36b;font-weight:bold;">Second failure - the quoted charge increases by 10%.</span>';
+            } else {
+                resultText = '<span style="color:#ffb36b;font-weight:bold;">Failure - no change yet. One haggle attempt remains.</span>';
+            }
+        }
+        if (q.status === 'quote') {
+            buttons += '<div style="margin-top:8px;">' +
+                menuBtn('Accept Quote / Pay', '!sage-accept-question --pc|' + employer.id + ' --question|' + q.id, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 140) +
+                (!(q.haggleDone || (q.haggleAttempts || 0) >= 2) ? menuBtn('Haggle Price', '!sage-haggle-question --pc|' + employer.id + ' --question|' + q.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) : '') +
+                menuBtn('Deny Quote', '!sage-deny-question --pc|' + employer.id + ' --question|' + q.id, CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 100) +
+                '</div>';
+        }
+        send(box('Haggle Sage Price',
+            line('Question', esc(q.question)) +
+            line('Result', resultText) +
+            line('Current Quote', esc((q.currentCostGp || 0) + ' gp')) +
+            buttons +
+            backMenuButton(employer.id)
+        ));
+    }
+
+    function handleOpenQuestions(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var isGM = playerIsGM(msg.playerid);
+    var activeColor = CONFIG.colors.activeText;
+    var list = _.filter(allQuestions(), function (q) {
+        return (q.status === 'researching' || q.status === 'ready') && (!employer || q.employerId === employer.id);
+    });
+    send(box(isGM ? 'Pending Research / Answer Now' : 'Pending Research',
+        '<div style="margin-bottom:6px;color:' + activeColor + ';font-weight:bold;">Current active research is listed below.</div>' +
+        (list.length ? _.map(list, function (q) {
+            var sage = q.sourceKind === 'sage' ? getSageById(q.sageId) : null;
+            var canAnswerNow = q.sourceKind === 'sage' && isGM && sage && employerCanCollectReadyAnswer(employer, sage, q);
+            var rehireBtn = '';
+            var addDayBtn = '';
+            var note = '';
+            if (q.sourceKind === 'library') {
+                note = q.status === 'ready' ? pcResearchResultText(q) : 'Library research is still underway. The character is occupied and cannot begin other research through this system.';
+            } else {
+                note = q.status === 'ready' ? 'The research is finished. The sage will still give this completed answer even if the paid employment time has ended.' : 'The research is still underway.';
+                if (sage && sageIsResting(sage)) {
+                    note += ' ' + sageRestMessage(sage);
+                }
+            }
+            if (isGM && q.status === 'researching' && q.timeUnit === 'days') {
+                addDayBtn = menuBtn('Add 1 Day', '!sage-apply-days' + (employer ? ' --pc|' + employer.id : '') + ' --days|1', CONFIG.colors.reportBg, CONFIG.colors.reportBorder, 85);
+            }
+            return '<div style="margin-bottom:8px;color:' + activeColor + ';">' +
+                '<b>' + esc(q.sourceKind === 'library' ? q.researcherName : q.sageName) + '</b> — ' + esc(q.question) + '<br>' +
+                'Type: ' + esc(questionSourceLabel(q)) + ' | Status: ' + esc(questionResearchStatusLabel(q)) + ' | Time Frame: ' + esc(questionBroadTimeFrameLabel(q)) + '<br>' +
+                esc(note) +
+                (q.sourceKind === 'library' && q.status === 'ready' ? '<br><span style="color:' + CONFIG.colors.subtext + ';">Library: ' + esc(q.librarySizeLabel || q.librarySize || '') + '</span>' : '') +
+                (isGM && q.sourceKind === 'sage' ? '<br>' + (canAnswerNow ? menuBtn('Answer Now', '!sage-set-answer' + (employer ? ' --pc|' + employer.id : '') + ' --question|' + q.id + ' --text|?{GM answer text|}', CONFIG.colors.gmBg, CONFIG.colors.gmBorder, 95) : '<span style="color:' + CONFIG.colors.subtext + ';">Only the employer who asked this question may collect the answer.</span>') : '') +
+                (rehireBtn ? '<br>' + rehireBtn : '') +
+                (addDayBtn ? '<br>' + addDayBtn : '') +
+                '</div>';
+        }).join('') : '<div>No pending research.</div>') + backMenuButton(employer ? employer.id : '')
+    ));
+}
+
+    function resolveCompletedQuestionsForDay() {
+    _.each(_.filter(allQuestions(), function (q) { return q.status === 'researching' && q.readyDay <= state[STATE].currentDay; }), function (q) {
+        q.status = 'ready';
+        if (q.sourceKind === 'library') {
+            sendGM(box('PC Research Complete',
+                line('Researcher', esc(q.researcherName || q.employerName)) +
+                line('Question', esc(q.question)) +
+                line('Library Size', esc(q.librarySizeLabel || q.librarySize || '')) +
+                line('Exact Research Time', esc(questionExactTimeLabel(q))) +
+                line('Intelligence Check', esc(q.intRoll + ' vs ' + q.intTarget + ' (' + (q.intSuccess ? 'success' : 'failure') + ')')) +
+                line('Research Result', esc(q.known ? 'Useful information found.' : 'No useful answer found.')) +
+                backMenuButton(q.employerId)
+            ));
+        } else {
+            sendGM(box('Sage Research Ready',
+                line('Sage', esc(q.sageName)) +
+                line('Employer', esc(q.employerName)) +
+                line('Question', esc(q.question)) +
+                line('Exact Research Time', esc(questionExactTimeLabel(q))) +
+                line('Knows Answer', esc(q.known ? 'Yes' : 'No')) +
+                '<div style="margin-top:6px;">The research phase is complete. Use <b>Answer Now</b> when the sage is consulted during play.</div>' +
+                backMenuButton(q.employerId)
+            ));
+        }
+    });
+}
+
+    function processMonthlyCosts(months) {
+        _.each(_.filter(allSages(), function (s) { return s.employment === 'permanent'; }), function (sage) {
+            sage.monthlyDueDay += months * CONFIG.daysPerMonth;
+        });
+    }
+
+    function processStudies(days) {
+        _.each(allSages(), function (sage) {
+            if (!sage.activeStudy) return;
+            if (sage.activeStudy.endDay > state[STATE].currentDay) return;
+            var study = sage.activeStudy;
+            if (study.kind === 'outsidebonus') {
+                sage.outsideFieldBonusPct = Math.min(5, (Number(sage.outsideFieldBonusPct) || 0) + 1);
+            } else if (study.kind === 'minorbonus') {
+                sage.minorFieldBonusPct = Math.min(5, (Number(sage.minorFieldBonusPct) || 0) + 1);
+            } else if (study.kind === 'addminor') {
+                if (!_.contains(sage.minorFields, study.fieldKey) && sage.minorFields.length < 3) sage.minorFields.push(study.fieldKey);
+            } else if (study.kind === 'addmajor') {
+                if (!_.contains(sage.minorFields, study.fieldKey) && sage.majorField !== study.fieldKey) {
+                    if (sage.minorFields.length < 3) sage.minorFields.push(study.fieldKey);
+                }
+            }
+            sage.activeStudy = null;
+            updateCharacterForSage(sage);
+            sendGM(box('Sage Study Complete', line('Sage', esc(sage.name)) + line('Completed', esc(study.label))));
+        });
+    }
+
+    function handleApplyDays(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var days = Math.max(1, parseInt(args.days || 1, 10));
+    state[STATE].currentDay += days;
+    processStudies(days);
+    resolveCompletedQuestionsForDay();
+    _.each(allSages(), function (sage) { finishShortTermIfIdle(sage); });
+    send(box('Advance Days',
+        line('Days Passed', String(days)) +
+        '<div>Time has been updated. Pending research has been checked.</div>' +
+        backMenuButton(employer ? employer.id : '')
+    ));
+}
+
+    function handleApplyMonths(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        var months = Math.max(1, parseInt(args.months || 1, 10));
+        var payer = employer;
+        var dueCp = 0;
+        _.each(_.filter(allSages(), function (s) { return s.employment === 'permanent' && (!payer || s.ownerId === payer.id); }), function (sage) {
+            dueCp += gpToCp((sage.salaryGp + sage.grantGp) * months);
+        });
+        if (payer && dueCp > 0 && !deductCoins(payer.id, dueCp)) {
+            send(box('Advance Months',
+                line('Employer', esc(employerName(payer))) +
+                line('Amount Due', esc(formatCoinsFromCp(dueCp))) +
+                '<div>Not enough coin to cover permanent sages for this period.</div>' +
+                backMenuButton(payer.id)
+            ));
+            return;
+        }
+        state[STATE].currentDay += months * CONFIG.daysPerMonth;
+        processMonthlyCosts(months);
+        processStudies(months * CONFIG.daysPerMonth);
+        resolveCompletedQuestionsForDay();
+        send(box('Advance Months',
+            line('Months Passed', String(months)) +
+            (payer ? line('Paid', esc(formatCoinsFromCp(dueCp))) : '') +
+            '<div>Time has been updated. Pending research has been checked.</div>' +
+            backMenuButton(payer ? payer.id : '')
+        ));
+    }
+
+    function handleEndShortTermMenu(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        if (!employer) {
+            send(box('End Short-Term', 'Select an employer token first.' + backMenuButton('')));
+            return;
+        }
+        send(box('End Short-Term',
+            sageButtons(function (s) { return s.shortTerm && s.shortTerm.employerId === employer.id; }, function (s) {
+                return menuBtn('End', '!sage-end-shortterm --pc|' + employer.id + ' --sage|' + s.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 80);
+            }, 'No short-term sages are serving this employer.') +
+            backMenuButton(employer.id)
+        ));
+    }
+
+    function handleEndShortTerm(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var sage = getSageById(args.sage);
+    if (!employer || !sage || !sage.shortTerm || sage.shortTerm.employerId !== employer.id) {
+        send(box('End Short-Term', 'Employer or sage not found.' + backMenuButton(employer ? employer.id : '')));
+        return;
+    }
+    if (shortTermResearchingQuestion(sage) || shortTermReadyQuestion(sage)) {
+        send(box('End Short-Term',
+            line('Sage', esc(sage.name)) +
+            '<div>This sage still has a research question in progress or a completed answer waiting to be delivered. The rest period starts only after that answer is completed.</div>' +
+            backMenuButton(employer.id)
+        ));
+        return;
+    }
+    sage.cooldownUntilDay = state[STATE].currentDay + CONFIG.cooldownDaysAfterShortTerm;
+    sage.shortTerm = null;
+    send(box('End Short-Term',
+        line('Sage', esc(sage.name)) +
+        line('Resting For', String(sageRestDaysRemaining(sage)) + ' day(s)') +
+        backMenuButton(employer.id)
+    ));
+}
+
+    function handleHireMenu(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    if (!employer) {
+        send(box('Hire Long-Term Sage', 'Select an employer token first.' + backMenuButton('')));
+        return;
+    }
+    if (activePcResearchForEmployer(employer)) {
+        send(box('Hire Long-Term Sage', '<div>' + esc(blockedByPcResearchText(employer)) + '</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    send(box('Hire Long-Term Sage',
+        '<div style="margin-bottom:6px;">Choose a sage, enter the monthly salary, research grant, and initial material expenditure, then pay up front before questions begin.</div>' +
+        sageButtons(function (s) {
+            return s.employment !== 'permanent' && !s.activeStudy && (!s.shortTerm || s.shortTerm.employerId === employer.id) && s.cooldownUntilDay <= state[STATE].currentDay;
+        }, function (s) {
+            return menuBtn('Hire Long-Term', '!sage-offer-employment --pc|' + employer.id + ' --sage|' + s.id +
+                ' --salarygp|?{Salary per month in gp|700}' +
+                ' --grantgp|?{Research grant per month in gp|700}' +
+                ' --materialsgp|?{Initial material expenditure in gp|20000}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 110);
+        }, 'No sages are currently available for permanent employment.') +
+        backMenuButton(employer.id)
+    ));
+}
+
+    function handleOfferEmployment(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var sage = getSageById(args.sage);
+    var salaryGp;
+    var grantGp;
+    var materialsGp;
+    var reactionBonus;
+    var reactionRoll;
+    var favorable;
+    var salaryExpectation;
+    var grantExpectation;
+    var meetsMoney;
+    var quote;
+    if (!employer || !sage) {
+        send(box('Hire Long-Term Sage', 'Employer or sage not found.' + backMenuButton(employer ? employer.id : '')));
+        return;
+    }
+    if (activePcResearchForEmployer(employer)) {
+        send(box('Hire Long-Term Sage', '<div>' + esc(blockedByPcResearchText(employer)) + '</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    if (sage.employment === 'permanent') {
+        send(box('Hire Long-Term Sage', '<div>This sage is already permanently employed.</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    salaryGp = Math.max(0, parseInt(args.salarygp || 0, 10));
+    grantGp = Math.max(0, parseInt(args.grantgp || 0, 10));
+    materialsGp = Math.max(0, parseInt(args.materialsgp || 0, 10));
+    if (materialsGp < 20000) {
+        send(box('Hire Long-Term Sage', '<div>Initial material expenditure must be at least 20,000 gp.</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    reactionBonus = getReactionBonus(employer.id);
+    reactionRoll = hireEligibilityRoll(reactionBonus);
+    favorable = reactionRoll >= 11;
+    salaryExpectation = salaryExpectationFrom2d6();
+    grantExpectation = salaryExpectationFrom2d6();
+    meetsMoney = salaryGp >= salaryExpectation && grantGp >= grantExpectation;
+
+    if (!favorable || !meetsMoney) {
+        send(box('Hire Long-Term Sage',
+            line('Sage', esc(sage.name)) +
+            line('Offer', esc(salaryGp + ' gp salary, ' + grantGp + ' gp grant, ' + materialsGp + ' gp materials')) +
+            '<div>The sage declines permanent employment.</div>' +
+            backMenuButton(employer.id)
+        ));
+        return;
+    }
+
+    quote = buildHireQuote(employer, sage, 'longterm', {
+        currentCostGp: salaryGp + grantGp + materialsGp,
+        salaryGp: salaryGp,
+        grantGp: grantGp,
+        materialsGp: materialsGp,
+        reactionRoll: reactionRoll,
+        favorable: favorable,
+        salaryExpectationGp: salaryExpectation,
+        grantExpectationGp: grantExpectation
+    });
+    allHireQuotes().push(quote);
+    renderHireQuote(quote, employer, 'Payment is made up front. Once paid, this sage may begin answering questions under the long-term employment rules.');
+}
+
+function handleAcceptHireQuote(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var quote = getHireQuoteById(args.quote);
+    var sage;
+    var costCp;
+    var linkedQuestion;
+    if (!employer || !quote || quote.employerId !== employer.id || quote.status !== 'quote') {
+        send(box('Sage Quote', '<div>Quote not found for this employer.</div>' + backMenuButton(employer ? employer.id : '')));
+        return;
+    }
+    sage = getSageById(quote.sageId);
+    if (!sage) {
+        removeHireQuote(quote.id);
+        send(box('Sage Quote', '<div>Sage not found.</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    costCp = gpToCp(quote.currentCostGp);
+    if (costCp > 0 && !deductCoins(employer.id, costCp)) {
+        send(box(hireQuoteTitle(quote),
+            line('Employer', esc(employerName(employer))) +
+            line('Amount Due', esc(formatCoinsFromCp(costCp))) +
+            '<div>Not enough coin on the employer sheet.</div>' +
+            backMenuButton(employer.id)
+        ));
+        return;
+    }
+
+    if (quote.kind === 'shortterm') {
+        ensureShortTermSession(sage, employer, quote.days);
+        removeHireQuote(quote.id);
+        updateCharacterForSage(sage);
+        send(box('Short-Term Sage Hired',
+            line('Employer', esc(employerName(employer))) +
+            line('Sage', esc(sage.name)) +
+            line('Days Paid', String(quote.days)) +
+            line('Paid', esc(quote.currentCostGp + ' gp')) +
+            menuBtn('Ask Question', askCommandForSage(employer.id, sage.id), CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 110) +
+            backMenuButton(employer.id)
+        ));
+        return;
+    }
+
+    if (quote.kind === 'extension') {
+        linkedQuestion = getQuestionById(quote.linkedQuestionId);
+        ensureShortTermSession(sage, employer, quote.days);
+        removeHireQuote(quote.id);
+        if (linkedQuestion) {
+            linkedQuestion.status = linkedQuestion.finalStatus || 'researching';
+            linkedQuestion.createdDay = state[STATE].currentDay;
+        }
+        updateCharacterForSage(sage);
+        send(box('Short-Term Extended',
+            line('Employer', esc(employerName(employer))) +
+            line('Sage', esc(sage.name)) +
+            line('Additional Days Paid', String(quote.days)) +
+            line('Paid', esc(quote.currentCostGp + ' gp')) +
+            (linkedQuestion ? line('Time Frame', esc(questionBroadTimeFrameLabel(linkedQuestion))) : '') +
+            '<div>The rest period begins only after any research from this extension is completed.</div>' +
+            backMenuButton(employer.id)
+        ));
+        return;
+    }
+
+    if (quote.kind === 'longterm') {
+        sage.employment = 'permanent';
+        sage.ownerId = employer.id;
+        sage.ownerName = employerName(employer);
+        sage.salaryGp = quote.salaryGp;
+        sage.grantGp = quote.grantGp;
+        sage.materialsGp = quote.materialsGp;
+        sage.efficiencyPct = efficiencyFromMaterials(quote.materialsGp);
+        sage.monthlyDueDay = state[STATE].currentDay + CONFIG.daysPerMonth;
+        sage.hireRoll = quote.reactionRoll;
+        sage.salaryExpectationGp = quote.salaryExpectationGp;
+        sage.grantExpectationGp = quote.grantExpectationGp;
+        sage.shortTerm = null;
+        removeHireQuote(quote.id);
+        updateCharacterForSage(sage);
+        send(box('Long-Term Sage Hired',
+            line('Employer', esc(employerName(employer))) +
+            line('Sage', esc(sage.name)) +
+            line('Paid Now', esc(quote.currentCostGp + ' gp')) +
+            line('Salary', esc(quote.salaryGp + ' gp/month')) +
+            line('Grant', esc(quote.grantGp + ' gp/month')) +
+            line('Materials', esc(quote.materialsGp + ' gp')) +
+            line('Efficiency', String(sage.efficiencyPct) + '%') +
+            menuBtn('Ask Question', askCommandForSage(employer.id, sage.id), CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 110) +
+            backMenuButton(employer.id)
+        ));
+    }
+}
+
+function handleDenyHireQuote(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var quote = getHireQuoteById(args.quote);
+    if (quote) {
+        if (quote.kind === 'extension') {
+            state[STATE].questions = _.reject(allQuestions(), function (q) { return q.id === quote.linkedQuestionId; });
+        }
+        removeHireQuote(quote.id);
+    }
+    send(box('Sage Quote', '<div>Quote removed.</div>' + backMenuButton(employer ? employer.id : '')));
+}
+
+function handleHaggleHireQuote(msg, args) {
+    var employer = resolveEmployer(msg, args);
+    var quote = getHireQuoteById(args.quote);
+    var target;
+    var roll;
+    var success;
+    var resultText;
+    var buttons = '';
+    if (!employer || !quote || quote.employerId !== employer.id) {
+        send(box('Haggle Sage Price', 'Quote not found for this employer.' + backMenuButton(employer ? employer.id : '')));
+        return;
+    }
+    if (quote.status !== 'quote') {
+        send(box('Haggle Sage Price', '<div>This quote is no longer open for haggling.</div>' + backMenuButton(employer.id)));
+        return;
+    }
+    if (quote.haggleDone || (quote.haggleAttempts || 0) >= 2) {
+        send(box('Haggle Sage Price',
+            line('Sage', esc(quote.sageName)) +
+            '<div>No more haggle attempts remain for this quote.</div>' +
+            backMenuButton(employer.id)
+        ));
+        return;
+    }
+    target = Math.max(0, Math.min(95, 10 + (Number(quote.reactionBonus) || 0)));
+    roll = randomIntegerInclusive(1, 100);
+    success = roll <= target;
+    quote.haggleAttempts = (quote.haggleAttempts || 0) + 1;
+
+    if (success) {
+        quote.currentCostGp = Math.max(0, Math.round((Number(quote.currentCostGp) || 0) * 0.95));
+        quote.haggleDone = true;
+        resultText = '<span style="color:#8fe38f;font-weight:bold;">Success - the sage reduces the quoted charge by 5%.</span>';
+    } else {
+        quote.haggleFailures = (quote.haggleFailures || 0) + 1;
+        if ((quote.haggleAttempts || 0) >= 2) {
+            quote.currentCostGp = Math.max(0, Math.round((Number(quote.currentCostGp) || 0) * 1.10));
+            quote.haggleDone = true;
+            resultText = '<span style="color:#ffb36b;font-weight:bold;">Second failure - the quoted charge increases by 10%.</span>';
+        } else {
+            resultText = '<span style="color:#ffb36b;font-weight:bold;">Failure - no change yet. One haggle attempt remains.</span>';
+        }
+    }
+
+    if (quote.status === 'quote') {
+        buttons += '<div style="margin-top:8px;">' +
+            menuBtn('Accept Quote / Pay', '!sage-accept-hirequote --pc|' + employer.id + ' --quote|' + quote.id, CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 140) +
+            (!(quote.haggleDone || (quote.haggleAttempts || 0) >= 2) ? menuBtn('Haggle Price', '!sage-haggle-hirequote --pc|' + employer.id + ' --quote|' + quote.id, CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 110) : '') +
+            menuBtn('Deny Quote', '!sage-deny-hirequote --pc|' + employer.id + ' --quote|' + quote.id, CONFIG.colors.dangerBg, CONFIG.colors.dangerBorder, 100) +
+            '</div>';
+    }
+
+    send(box('Haggle Sage Price',
+        line('Sage', esc(quote.sageName)) +
+        line('Result', resultText) +
+        line('Current Quote', esc((quote.currentCostGp || 0) + ' gp')) +
+        buttons +
+        backMenuButton(employer.id)
+    ));
+}
+
+        function handleStudyMenu(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        if (!employer) {
+            send(box('Sage Study', 'Select an employer token first.' + backMenuButton('')));
+            return;
+        }
+        send(box('Sage Study and Library Upgrades',
+            '<div style="margin-bottom:6px;">No questions may be asked during the study period or the investment is wasted. This script blocks questions while study is active.</div>' +
+            sageButtons(function (s) { return s.employment === 'permanent' && s.ownerId === employer.id && !s.activeStudy; }, function (s) {
+                return menuBtn('Outside +1%', '!sage-start-study --pc|' + employer.id + ' --sage|' + s.id + ' --kind|outsidebonus', CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 95) +
+                    menuBtn('Minor +1%', '!sage-start-study --pc|' + employer.id + ' --sage|' + s.id + ' --kind|minorbonus', CONFIG.colors.warnBg, CONFIG.colors.warnBorder, 95) +
+                    menuBtn('Add Minor', '!sage-start-study --pc|' + employer.id + ' --sage|' + s.id + ' --kind|addminor --field|?{New minor field|' + requirementListForMenu() + '}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 90) +
+                    menuBtn('Add Major', '!sage-start-study --pc|' + employer.id + ' --sage|' + s.id + ' --kind|addmajor --field|?{New major field|' + requirementListForMenu() + '}', CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 90);
+            }, 'No permanently employed sages available for study.') +
+            backMenuButton(employer.id)
+        ));
+    }
+
+    function handleStartStudy(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        var sage = getSageById(args.sage);
+        if (!employer || !sage || sage.employment !== 'permanent' || sage.ownerId !== employer.id) {
+            send(box('Sage Study', 'Employer or sage not found.' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        if (sage.activeStudy) {
+            send(box('Sage Study', '<div>This sage is already studying.</div>' + backMenuButton(employer.id)));
+            return;
+        }
+        var kind = normalizeText(args.kind);
+        var gpCost = 0;
+        var days = 0;
+        var label = '';
+        var fieldKey = null;
+        if (kind === 'outsidebonus') {
+            if ((sage.outsideFieldBonusPct || 0) >= 5) {
+                send(box('Sage Study', '<div>Outside-field bonus is already at the 5% maximum.</div>' + backMenuButton(employer.id)));
+                return;
+            }
+            gpCost = 5000;
+            days = CONFIG.daysPerMonth;
+            label = 'Outside-field knowledge +1%';
+        } else if (kind === 'minorbonus') {
+            if ((sage.minorFieldBonusPct || 0) >= 5) {
+                send(box('Sage Study', '<div>Minor-field bonus is already at the 5% maximum.</div>' + backMenuButton(employer.id)));
+                return;
+            }
+            gpCost = 10000;
+            days = CONFIG.daysPerMonth;
+            label = 'Minor-field knowledge +1%';
+        } else if (kind === 'addminor') {
+            fieldKey = resolveFieldKey(args.field);
+            if (!fieldKey || fieldKey === sage.majorField || _.contains(sage.minorFields, fieldKey)) {
+                send(box('Sage Study', '<div>Choose a valid new minor field.</div>' + backMenuButton(employer.id)));
+                return;
+            }
+            if (sage.minorFields.length >= 3) {
+                send(box('Sage Study', '<div>This sage already has the maximum three minor fields.</div>' + backMenuButton(employer.id)));
+                return;
+            }
+            gpCost = 100000;
+            days = 2 * 365;
+            label = 'Add minor field: ' + labelForField(fieldKey);
+        } else if (kind === 'addmajor') {
+            fieldKey = resolveFieldKey(args.field);
+            if (!fieldKey || fieldKey === sage.majorField || _.contains(sage.minorFields, fieldKey)) {
+                send(box('Sage Study', '<div>Choose a valid new major field.</div>' + backMenuButton(employer.id)));
+                return;
+            }
+            gpCost = 200000;
+            days = 2 * 365;
+            label = 'Add major field: ' + labelForField(fieldKey);
+        } else {
+            send(box('Sage Study', '<div>Unknown study type.</div>' + backMenuButton(employer.id)));
+            return;
+        }
+        if (!deductCoins(employer.id, gpToCp(gpCost))) {
+            send(box('Sage Study',
+                line('Employer', esc(employerName(employer))) +
+                line('Amount Due Now', esc(gpCost + ' gp')) +
+                '<div>Not enough coin on the employer sheet.</div>' +
+                backMenuButton(employer.id)
+            ));
+            return;
+        }
+        sage.activeStudy = {
+            kind: kind,
+            label: label,
+            startDay: state[STATE].currentDay,
+            endDay: state[STATE].currentDay + days,
+            fieldKey: fieldKey
+        };
+        send(box('Sage Study Begun',
+            line('Sage', esc(sage.name)) +
+            line('Study', esc(label)) +
+            line('Cost Paid', esc(gpCost + ' gp')) +
+            line('Ends on Day', String(sage.activeStudy.endDay)) +
+            backMenuButton(employer.id)
+        ));
+    }
+
+    function handlePcResearchMenu(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        if (!employer) {
+            send(box('PC Research', 'Select an employer token first.' + backMenuButton('')));
+            return;
+        }
+        if (activePcResearchForEmployer(employer)) {
+            send(box('PC Research', '<div>' + esc(blockedByPcResearchText(employer)) + '</div>' + backMenuButton(employer.id)));
+            return;
+        }
+        send(box('PC Research',
+            '<div style="margin-bottom:6px;">This uses the employer\'s research library and intelligence. While this research is in progress, the character is treated as occupied and cannot begin other research through this script.</div>' +
+            menuBtn('Begin PC Research', pcResearchCommand(employer.id), CONFIG.colors.primaryBg, CONFIG.colors.primaryBorder, 135) +
+            backMenuButton(employer.id)
+        ));
+    }
+
+    function handlePcResearchStart(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        var q;
+        if (!employer) {
+            send(box('PC Research', 'Select an employer token first.' + backMenuButton('')));
+            return;
+        }
+        if (activePcResearchForEmployer(employer)) {
+            send(box('PC Research', '<div>' + esc(blockedByPcResearchText(employer)) + '</div>' + backMenuButton(employer.id)));
+            return;
+        }
+        q = createPcResearchRecord(employer, args);
+        if (q.error) {
+            send(box('PC Research', '<div>' + esc(q.error) + '</div>' + backMenuButton(employer.id)));
+            return;
+        }
+        allQuestions().push(q);
+        send(box('PC Research Begun',
+            line('Researcher', esc(employerName(employer))) +
+            line('Question', esc(q.question)) +
+            line('Library', esc(q.librarySizeLabel)) +
+            line('Field Relation', esc(fieldRelationLabel(q.relation))) +
+            line('Question Type', esc(natureLabel(q.nature))) +
+            line('Time Frame', esc(questionBroadTimeFrameLabel(q))) +
+            '<div style="margin-top:6px;">Research begins. Check Pending Research after the GM applies days.</div>' +
+            backMenuButton(employer.id)
+        ));
+    }
+
+    function handleSetAnswer(msg, args) {
+        var employer = resolveEmployer(msg, args);
+        var q = getQuestionById(args.question);
+        var sage;
+        var answerText;
+        if (!playerIsGM(msg.playerid)) return;
+        if (!q) {
+            send(box('Set Sage Answer', '<div>Question not found.</div>' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        if (q.sourceKind !== 'sage') {
+            send(box('Set Sage Answer', '<div>Answer Now only applies to sage research.</div>' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        sage = getSageById(q.sageId);
+        if (!sage) {
+            send(box('Set Sage Answer', '<div>Sage not found.</div>' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        if (!employerCanCollectReadyAnswer(employer, sage, q)) {
+            send(box('Set Sage Answer', '<div>The employer for this question is the only character who may collect this completed answer.</div>' + backMenuButton(employer ? employer.id : '')));
+            return;
+        }
+        answerText = String(args.text || '').trim();
+        if (!answerText) {
+            answerText = q.known ? 'The sage gives the prepared answer.' : 'After consideration, the sage has no answer to offer.';
+        }
+        q.answerText = answerText;
+        q.status = 'answered';
+        q.answeredDay = state[STATE].currentDay;
+        var restDays = restDaysForQuestion(q);
+        var restNote = '';
+        if (restDays > 0) {
+            sage.restDaysRequired = restDays;
+            sage.restUntilDay = state[STATE].currentDay + restDays;
+            sage.restWarning = 'After answering this question, the sage requires ' + restDays + ' day(s) of rest. During this time, only general questions should be asked.';
+            restNote = '<div style="margin-top:6px;"><b>Rest Required:</b> ' + esc(sage.restWarning) + '</div>';
+        } else {
+            sage.restDaysRequired = 0;
+            sage.restWarning = '';
+        }
+        send(box('Sage Answer',
+            line('Employer', esc(q.employerName)) +
+            line('Sage', esc(q.sageName)) +
+            line('Question', esc(q.question)) +
+            '<div style="margin-top:6px;"><b>Answer:</b> ' + esc(q.answerText) + '</div>' +
+            restNote +
+            backMenuButton(employer ? employer.id : '')
+        ));
+        if (sage.temporary) {
+            state[STATE].sages = _.reject(allSages(), function (s) { return s.id === sage.id; });
+        }
+        finishShortTermIfIdle(sage);
+    }
+
+    function handleReset(msg, args) {
+        if (!playerIsGM(msg.playerid)) return;
+        if (normalizeText(args.confirm) !== 'yes') {
+            send(box('Reset Sage Data', '<div>Reset cancelled.</div>' + backMenuButton('')));
+            return;
+        }
+        state[STATE] = {
+            version: VERSION,
+            currentDay: 0,
+            nextSageId: 1,
+            nextQuestionId: 1,
+            nextHireQuoteId: 1,
+            sages: [],
+            questions: [],
+            hireQuotes: []
+        };
+        send(box('Reset Sage Data', '<div>All sage data removed.</div>' + backMenuButton('')));
+    }
+
+    function handleInput(msg) {
+    if (msg.type !== 'api') return;
+    var cmd = (msg.content || '').split(/\s+/)[0];
+    var args = parseArgs(msg.content || '');
+    if (cmd === '!sage-menu') return buildMainMenu(msg, args);
+    if (cmd === '!sage-add-menu') return handleAddMenu(msg, args);
+    if (cmd === '!sage-add-random') return handleAddRandom(msg, args);
+    if (cmd === '!sage-add-custom-menu') return handleAddCustomMenu(msg, args);
+    if (cmd === '!sage-add-custom-fields') return handleAddCustomFields(msg, args);
+    if (cmd === '!sage-add-custom') return handleAddCustom(msg, args);
+    if (cmd === '!sage-report') return handleReport(msg, args);
+    if (cmd === '!sage-report-public') return handleReportPublic(msg, args);
+    if (cmd === '!sage-remove-list') return handleRemoveList(msg, args);
+    if (cmd === '!sage-remove') return handleRemove(msg, args);
+    if (cmd === '!sage-begin-shortterm-menu') return handleBeginShortTermMenu(msg, args);
+    if (cmd === '!sage-begin-shortterm') return handleBeginShortTerm(msg, args);
+    if (cmd === '!sage-ask-menu') return handleAskMenu(msg, args);
+    if (cmd === '!sage-ask') return handleAsk(msg, args);
+    if (cmd === '!sage-accept-question') return handleAcceptQuestion(msg, args);
+    if (cmd === '!sage-deny-question') return handleDenyQuestion(msg, args);
+    if (cmd === '!sage-haggle-question') return handleHaggleQuestion(msg, args);
+    if (cmd === '!sage-open-questions') return handleOpenQuestions(msg, args);
+    if (cmd === '!sage-how-sages-work') return handleHowSagesWork(msg, args);
+    if (cmd === '!sage-pc-research-menu') return handlePcResearchMenu(msg, args);
+    if (cmd === '!sage-pc-research-start') return handlePcResearchStart(msg, args);
+    if (cmd === '!sage-pc-research-rules') return handlePcResearchRules(msg, args);
+    if (cmd === '!sage-chance-chart') return handleChanceChart(msg, args);
+    if (cmd === '!sage-time-chart') return handleTimeChart(msg, args);
+    if (cmd === '!sage-apply-days') return handleApplyDays(msg, args);
+    if (cmd === '!sage-apply-months') return handleApplyMonths(msg, args);
+    if (cmd === '!sage-end-shortterm-menu') return handleEndShortTermMenu(msg, args);
+    if (cmd === '!sage-end-shortterm') return handleEndShortTerm(msg, args);
+    if (cmd === '!sage-hire-menu') return handleHireMenu(msg, args);
+    if (cmd === '!sage-offer-employment') return handleOfferEmployment(msg, args);
+    if (cmd === '!sage-accept-hirequote') return handleAcceptHireQuote(msg, args);
+    if (cmd === '!sage-deny-hirequote') return handleDenyHireQuote(msg, args);
+    if (cmd === '!sage-haggle-hirequote') return handleHaggleHireQuote(msg, args);
+    if (cmd === '!sage-study-menu') return handleStudyMenu(msg, args);
+    if (cmd === '!sage-start-study') return handleStartStudy(msg, args);
+    if (cmd === '!sage-set-answer') return handleSetAnswer(msg, args);
+    if (cmd === '!sage-reset') return handleReset(msg, args);
+}
+
+    function registerEventHandlers() {
+        on('chat:message', handleInput);
+    }
+
+    on('ready', function () {
+        stateInit();
+        registerEventHandlers();
+        log(SCRIPT + ' v' + VERSION + ' ready.');
+    });
+
+    return {
+        _stateInit: stateInit
+    };
+}());
